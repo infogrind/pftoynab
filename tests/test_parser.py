@@ -56,27 +56,39 @@ def test_no_data_rows_raises():
         parse_postfinance_csv(text)
 
 
-def test_ambiguous_amounts_both_populated_raises():
-    text = build_export([row(credit="5", debit="-5")])
-    with pytest.raises(PftoynabError, match="both credit and debit amounts are populated"):
-        parse_postfinance_csv(text)
-
-
-def test_neither_amount_populated_raises():
-    text = build_export([row(credit="", debit="")])
-    with pytest.raises(PftoynabError, match="neither credit nor debit amount is populated"):
-        parse_postfinance_csv(text)
-
-
-def test_invalid_date_raises():
-    text = build_export([row(date="32.01.2026")])
-    with pytest.raises(PftoynabError, match="invalid date"):
-        parse_postfinance_csv(text)
-
-
-def test_invalid_amount_format_raises():
-    text = build_export([row(debit="abc", credit="")])
-    with pytest.raises(PftoynabError, match="not a valid amount"):
+@pytest.mark.parametrize(
+    ("row_kwargs", "match"),
+    [
+        pytest.param(
+            {"credit": "5", "debit": "-5"},
+            "both credit and debit amounts are populated",
+            id="ambiguous-amounts",
+        ),
+        pytest.param(
+            {"credit": "", "debit": ""},
+            "neither credit nor debit amount is populated",
+            id="no-amount",
+        ),
+        pytest.param({"date": "32.01.2026"}, "invalid date", id="invalid-date"),
+        pytest.param(
+            {"debit": "abc", "credit": ""}, "not a valid amount", id="invalid-amount-format"
+        ),
+        pytest.param(
+            {"debit": "-10.999", "credit": ""},
+            "more than 2 decimal places",
+            id="excess-precision",
+        ),
+        pytest.param(
+            {"credit": "-5", "debit": ""}, "credit amount is negative", id="negative-credit"
+        ),
+        pytest.param(
+            {"debit": "5", "credit": ""}, "debit amount is positive", id="positive-debit"
+        ),
+    ],
+)
+def test_validation_errors_for_single_bad_field(row_kwargs, match):
+    text = build_export([row(**row_kwargs)])
+    with pytest.raises(PftoynabError, match=match):
         parse_postfinance_csv(text)
 
 
@@ -90,28 +102,10 @@ def test_amount_does_not_cascade_into_extra_error():
     assert len(messages) == 1
 
 
-def test_amount_with_excess_precision_raises():
-    text = build_export([row(debit="-10.999", credit="")])
-    with pytest.raises(PftoynabError, match="more than 2 decimal places"):
-        parse_postfinance_csv(text)
-
-
 def test_swiss_thousands_separator_parsed():
     text = build_export([row(debit="-1'234.50", credit="")])
     transactions, _ = parse_postfinance_csv(text)
     assert transactions[0].outflow == Decimal("1234.50")
-
-
-def test_negative_credit_raises():
-    text = build_export([row(credit="-5", debit="")])
-    with pytest.raises(PftoynabError, match="credit amount is negative"):
-        parse_postfinance_csv(text)
-
-
-def test_positive_debit_raises():
-    text = build_export([row(debit="5", credit="")])
-    with pytest.raises(PftoynabError, match="debit amount is positive"):
-        parse_postfinance_csv(text)
 
 
 def test_row_too_short_raises():

@@ -18,7 +18,8 @@ from __future__ import annotations
 import csv
 import io
 import re
-from dataclasses import dataclass
+from collections.abc import Iterator
+from dataclasses import astuple, dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
@@ -53,7 +54,17 @@ def _normalize(cell: str) -> str:
     return cell.strip().lower()
 
 
-def _find_header(reader: csv.reader) -> dict[str, int | None]:
+@dataclass(frozen=True)
+class ColumnIndices:
+    date: int
+    desc: int
+    credit: int
+    debit: int
+    label: int | None
+    kategorie: int | None
+
+
+def _find_header(reader: Iterator[list[str]]) -> ColumnIndices:
     for row in reader:
         normalized = [_normalize(c) for c in row]
         if "datum" not in normalized or "avisierungstext" not in normalized:
@@ -66,14 +77,14 @@ def _find_header(reader: csv.reader) -> dict[str, int | None]:
         )
         if credit_idx is None or debit_idx is None:
             continue
-        return {
-            "date": normalized.index("datum"),
-            "desc": normalized.index("avisierungstext"),
-            "credit": credit_idx,
-            "debit": debit_idx,
-            "label": normalized.index("label") if "label" in normalized else None,
-            "kategorie": normalized.index("kategorie") if "kategorie" in normalized else None,
-        }
+        return ColumnIndices(
+            date=normalized.index("datum"),
+            desc=normalized.index("avisierungstext"),
+            credit=credit_idx,
+            debit=debit_idx,
+            label=normalized.index("label") if "label" in normalized else None,
+            kategorie=normalized.index("kategorie") if "kategorie" in normalized else None,
+        )
     raise PftoynabError(
         "could not find the expected PostFinance header row (looking for "
         "'Datum', 'Avisierungstext', 'Gutschrift in ...', 'Lastschrift in ...'). "
@@ -137,6 +148,72 @@ def _sanitize(
     return text
 
 
+def _parse_row(
+    row: list[str],
+    record_no: int,
+    cols: ColumnIndices,
+    expected_ncols: int,
+    strip_prefixes: list[str],
+    errors: list[str],
+    warnings: list[str],
+) -> Transaction | None:
+    if len(row) < expected_ncols:
+        errors.append(
+            f"record {record_no}: expected at least {expected_ncols} columns, got {len(row)}"
+        )
+        return None
+
+    date_raw = row[cols.date].strip()
+    try:
+        txn_date = datetime.strptime(date_raw, "%d.%m.%Y").date()  # noqa: DTZ007 -- calendar date only, no timezone concept applies
+    except ValueError:
+        errors.append(f"record {record_no}: invalid date {date_raw!r} (expected DD.MM.YYYY)")
+        return None
+
+    errors_before_amounts = len(errors)
+    credit = _parse_amount(row[cols.credit], "credit amount", record_no, errors)
+    debit = _parse_amount(row[cols.debit], "debit amount", record_no, errors)
+    if len(errors) > errors_before_amounts:
+        return None
+
+    if credit is None and debit is None:
+        errors.append(f"record {record_no}: neither credit nor debit amount is populated")
+        return None
+    if credit is not None and debit is not None:
+        errors.append(
+            f"record {record_no}: both credit and debit amounts are populated (ambiguous)"
+        )
+        return None
+    if credit is not None and credit < 0:
+        errors.append(
+            f"record {record_no}: credit amount is negative ({credit}); expected non-negative"
+        )
+        return None
+    if debit is not None and debit > 0:
+        errors.append(
+            f"record {record_no}: debit amount is positive ({debit}); expected non-positive"
+        )
+        return None
+
+    desc = _strip_configured_prefix(row[cols.desc].strip(), strip_prefixes)
+    payee = _sanitize(desc, MAX_PAYEE_LEN, "payee", record_no, warnings)
+    if not payee:
+        errors.append(f"record {record_no}: description/payee is empty")
+        return None
+
+    memo_parts = [
+        row[idx].strip()
+        for idx in (cols.label, cols.kategorie)
+        if idx is not None and idx < len(row) and row[idx].strip()
+    ]
+    memo = _sanitize(" | ".join(memo_parts), MAX_MEMO_LEN, "memo", record_no, warnings)
+
+    outflow = -debit if debit is not None else None
+    inflow = credit if credit is not None else None
+
+    return Transaction(txn_date, payee, memo, outflow, inflow)
+
+
 def parse_postfinance_csv(
     text: str, strip_prefixes: list[str] | None = None
 ) -> tuple[list[Transaction], list[str]]:
@@ -152,7 +229,7 @@ def parse_postfinance_csv(
     try:
         cols = _find_header(reader)
 
-        expected_ncols = max(v for v in cols.values() if v is not None) + 1
+        expected_ncols = max(v for v in astuple(cols) if v is not None) + 1
 
         errors: list[str] = []
         warnings: list[str] = []
@@ -191,61 +268,11 @@ def parse_postfinance_csv(
             started = True
             record_no += 1
 
-            if len(row) < expected_ncols:
-                errors.append(
-                    f"record {record_no}: expected at least {expected_ncols} columns, got {len(row)}"
-                )
-                continue
-
-            date_raw = row[cols["date"]].strip()
-            try:
-                txn_date = datetime.strptime(date_raw, "%d.%m.%Y").date()  # noqa: DTZ007 -- calendar date only, no timezone concept applies
-            except ValueError:
-                errors.append(f"record {record_no}: invalid date {date_raw!r} (expected DD.MM.YYYY)")
-                continue
-
-            errors_before_amounts = len(errors)
-            credit = _parse_amount(row[cols["credit"]], "credit amount", record_no, errors)
-            debit = _parse_amount(row[cols["debit"]], "debit amount", record_no, errors)
-            if len(errors) > errors_before_amounts:
-                continue
-
-            if credit is None and debit is None:
-                errors.append(f"record {record_no}: neither credit nor debit amount is populated")
-                continue
-            if credit is not None and debit is not None:
-                errors.append(
-                    f"record {record_no}: both credit and debit amounts are populated (ambiguous)"
-                )
-                continue
-            if credit is not None and credit < 0:
-                errors.append(
-                    f"record {record_no}: credit amount is negative ({credit}); expected non-negative"
-                )
-                continue
-            if debit is not None and debit > 0:
-                errors.append(
-                    f"record {record_no}: debit amount is positive ({debit}); expected non-positive"
-                )
-                continue
-
-            desc = _strip_configured_prefix(row[cols["desc"]].strip(), strip_prefixes)
-            payee = _sanitize(desc, MAX_PAYEE_LEN, "payee", record_no, warnings)
-            if not payee:
-                errors.append(f"record {record_no}: description/payee is empty")
-                continue
-
-            memo_parts = []
-            for key in ("label", "kategorie"):
-                idx = cols[key]
-                if idx is not None and idx < len(row) and row[idx].strip():
-                    memo_parts.append(row[idx].strip())
-            memo = _sanitize(" | ".join(memo_parts), MAX_MEMO_LEN, "memo", record_no, warnings)
-
-            outflow = -debit if debit is not None else None
-            inflow = credit if credit is not None else None
-
-            transactions.append(Transaction(txn_date, payee, memo, outflow, inflow))
+            transaction = _parse_row(
+                row, record_no, cols, expected_ncols, strip_prefixes, errors, warnings
+            )
+            if transaction is not None:
+                transactions.append(transaction)
     except csv.Error as e:
         raise PftoynabError(f"failed to parse CSV structure: {e}") from e
 
