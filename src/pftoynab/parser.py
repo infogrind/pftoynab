@@ -108,7 +108,9 @@ def _parse_amount(
     except InvalidOperation:
         errors.append(f"record {record_no}: {field_name} is not a valid amount: {raw!r}")
         return None
-    if -value.as_tuple().exponent > 2:
+    exponent = value.as_tuple().exponent
+    assert isinstance(exponent, int)  # stripped was regex-validated, so never NaN/Infinity
+    if -exponent > 2:
         errors.append(
             f"record {record_no}: {field_name} has more than 2 decimal places: {raw!r}"
         )
