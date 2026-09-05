@@ -1,5 +1,5 @@
 Date,Payee,Memo,Outflow,Inflow
-2026-01-12,'@SUM(1+1)*cmd|' /c calc'!A1,Sonstige Einnahmen,,50.00
-2026-01-13,'-2+3+cmd|' /c calc'!A1,Sonstige Einnahmen,,50.00
-2026-01-14,'+41000000001@evil.example,Sonstige Einnahmen,,50.00
-2026-01-15,"'=HYPERLINK(""http://evil.example"",""Klick hier"")",Sonstige Einnahmen,,50.00
+2026-01-12,'@SUM(1+1)*cmd|' /c calc'!A1,,,50.00
+2026-01-13,'-2+3+cmd|' /c calc'!A1,,,50.00
+2026-01-14,'+41000000001@evil.example,,,50.00
+2026-01-15,"'=HYPERLINK(""http://evil.example"",""Klick hier"")",,,50.00

@@ -167,6 +167,7 @@ def _parse_row(
     cols: ColumnIndices,
     expected_ncols: int,
     strip_prefixes: list[str],
+    include_category_memo: bool,
     errors: list[str],
     warnings: list[str],
 ) -> Transaction | None:
@@ -214,12 +215,15 @@ def _parse_row(
         errors.append(f"record {record_no}: description/payee is empty")
         return None
 
-    memo_parts = [
-        row[idx].strip()
-        for idx in (cols.label, cols.kategorie)
-        if idx is not None and idx < len(row) and row[idx].strip()
-    ]
-    memo = sanitize_field(" | ".join(memo_parts), MAX_MEMO_LEN, "memo", record_no, warnings)
+    if include_category_memo:
+        memo_parts = [
+            row[idx].strip()
+            for idx in (cols.label, cols.kategorie)
+            if idx is not None and idx < len(row) and row[idx].strip()
+        ]
+        memo = sanitize_field(" | ".join(memo_parts), MAX_MEMO_LEN, "memo", record_no, warnings)
+    else:
+        memo = ""
 
     outflow = -debit if debit is not None else None
     inflow = credit if credit is not None else None
@@ -256,7 +260,9 @@ def _warn_about_ambiguous_dedup_groups(transactions: list[Transaction], warnings
 
 
 def parse_postfinance_csv(
-    text: str, strip_prefixes: list[str] | None = None
+    text: str,
+    strip_prefixes: list[str] | None = None,
+    include_category_memo: bool = False,
 ) -> tuple[list[Transaction], list[str]]:
     strip_prefixes = strip_prefixes or []
 
@@ -310,7 +316,14 @@ def parse_postfinance_csv(
             record_no += 1
 
             transaction = _parse_row(
-                row, record_no, cols, expected_ncols, strip_prefixes, errors, warnings
+                row,
+                record_no,
+                cols,
+                expected_ncols,
+                strip_prefixes,
+                include_category_memo,
+                errors,
+                warnings,
             )
             if transaction is not None:
                 transactions.append(transaction)

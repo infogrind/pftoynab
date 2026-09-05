@@ -1,0 +1,12 @@
+Date,Payee,Memo,Outflow,Inflow
+2026-01-06,Bäckerei Sonnenschein,Einkaufen // Detail-Lebensmittel,6.80,
+2026-01-07,Käserei Beispiel,Einkaufen // Detail-Lebensmittel,11.20,
+2026-01-08,Preis für Bankpaket Smart,Finanzen // Gebühren,5.00,
+2026-01-09,Beispiel Kindertagesstätte,Sonstige Ausgaben,1200.00,
+2026-01-10,TWINT Geld senden an +41000000001,Geschenk | Finanzen // Sonstige Geldtransfers,50.00,
+2026-01-11,"PostFinance, Kreditkarten",Überträge,389.90,
+2026-01-12,"Bargeldbezug vom 12.01.2026, Bahnhof Zürich HB",Finanzen // Bargeldbezug,200.00,
+2026-01-13,Muster Versicherung AG,Finanzen // Versicherungen,245.30,
+2026-01-14,Beispiel Arbeitgeber AG,Einkommen,,5000.00
+2026-01-15,Migros Beispielplatz,Einkaufen // Supermärkte,23.45,
+2026-01-15,Café Zürisee,Freizeit // Gastronomie,4.60,

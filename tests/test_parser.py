@@ -27,7 +27,7 @@ def test_parses_valid_export():
     assert expense.payee == "Coop Zürich"
     assert expense.outflow == Decimal("9.15")
     assert expense.inflow is None
-    assert expense.memo == "Einkaufen"
+    assert expense.memo == ""  # Memo is empty by default; see --category-memo
 
 
 def test_trailing_disclaimer_ignored_without_warning():
@@ -154,9 +154,16 @@ def test_payee_over_max_length_is_truncated_with_warning():
 
 def test_memo_over_max_length_is_truncated_with_warning():
     text = build_export([row(kategorie="B" * 300)])
-    transactions, warnings = parse_postfinance_csv(text)
+    transactions, warnings = parse_postfinance_csv(text, include_category_memo=True)
     assert len(transactions[0].memo) == 200
     assert any("memo exceeded 200 characters" in w for w in warnings)
+
+
+def test_memo_empty_by_default():
+    text = build_export([row(label="Vacation", kategorie="Freizeit // Reisen")])
+    transactions, warnings = parse_postfinance_csv(text)
+    assert transactions[0].memo == ""
+    assert warnings == []
 
 
 def test_null_byte_rejected():
@@ -189,7 +196,7 @@ def test_intraday_relative_order_preserved_on_sort():
 
 def test_label_and_kategorie_combined_into_memo():
     text = build_export([row(label="Vacation", kategorie="Freizeit // Reisen")])
-    transactions, _ = parse_postfinance_csv(text)
+    transactions, _ = parse_postfinance_csv(text, include_category_memo=True)
     assert transactions[0].memo == "Vacation | Freizeit // Reisen"
 
 

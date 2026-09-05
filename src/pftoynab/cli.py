@@ -73,15 +73,27 @@ def _build_parser() -> argparse.ArgumentParser:
         "-i",
         "--interactive-memo",
         action="store_true",
+        help="Interactively type a Memo for each transaction, in date order (Enter for none)",
+    )
+    parser.add_argument(
+        "-c",
+        "--category-memo",
+        action="store_true",
         help=(
-            "Interactively type a Memo for each transaction, in date order, instead of "
-            "using the one derived from the input's Label/Kategorie columns"
+            "Populate Memo from the input's Label/Kategorie columns; Memo is left empty "
+            "by default, since PostFinance's auto-assigned Kategorie is rarely useful as-is"
         ),
     )
     return parser
 
 
-def _run(input_path: Path | None, output_path: Path | None, force: bool, interactive_memo: bool) -> int:
+def _run(
+    input_path: Path | None,
+    output_path: Path | None,
+    force: bool,
+    interactive_memo: bool,
+    category_memo: bool,
+) -> int:
     config = load_config(find_config_path())
 
     if input_path is None:
@@ -104,7 +116,9 @@ def _run(input_path: Path | None, output_path: Path | None, force: bool, interac
         )
 
     text = _load_text(input_path)
-    transactions, warnings = parse_postfinance_csv(text, strip_prefixes=config.strip_prefixes)
+    transactions, warnings = parse_postfinance_csv(
+        text, strip_prefixes=config.strip_prefixes, include_category_memo=category_memo
+    )
 
     for w in warnings:
         print(f"Warning: {w}", file=sys.stderr)
@@ -139,7 +153,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
-        return _run(args.input_csv, args.output, args.force, args.interactive_memo)
+        return _run(
+            args.input_csv, args.output, args.force, args.interactive_memo, args.category_memo
+        )
     except PftoynabError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1

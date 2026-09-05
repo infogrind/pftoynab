@@ -44,6 +44,17 @@ def test_real_world_shaped_export_matches_golden_output(tmp_path):
     assert output_csv.read_bytes() == golden
 
 
+def test_category_memo_flag_matches_golden_output(tmp_path):
+    input_csv = _copy(tmp_path, "postfinance_export.csv")
+    output_csv = tmp_path / "output.csv"
+
+    exit_code = cli.main([str(input_csv), "-o", str(output_csv), "-c"])
+
+    assert exit_code == 0
+    golden = (TESTDATA / "postfinance_export_ynab_category_memo_golden.csv").read_bytes()
+    assert output_csv.read_bytes() == golden
+
+
 def test_html_error_page_instead_of_csv_is_rejected(tmp_path, capsys):
     # A very real mistake: the online-banking session expired and the user
     # saved the browser's error page instead of the actual export.

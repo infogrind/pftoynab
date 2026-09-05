@@ -36,10 +36,12 @@ Options:
 - `-o, --output PATH` — write to a specific output path instead of the default.
 - `--force` — overwrite the output file if it already exists.
 - `-i, --interactive-memo` — after parsing, walk through every transaction in
-  date order and type a `Memo` for each (Enter to leave one empty), instead
-  of using the one auto-derived from the input's `Label`/`Kategorie`
-  columns. Handy since PostFinance's auto-assigned `Kategorie` is often not
-  useful as-is.
+  date order and type a `Memo` for each (Enter to leave one empty).
+- `-c, --category-memo` — populate `Memo` from the input's `Label`/`Kategorie`
+  columns instead of leaving it empty (the default -- PostFinance's
+  auto-assigned `Kategorie` is rarely useful as-is). `-i` always starts each
+  prompt blank regardless of this flag, since it's meant for typing a fresh
+  Memo by hand.
 
 The script validates the input thoroughly and refuses to write output if
 anything looks wrong (unparsable dates/amounts, ambiguous or missing
@@ -91,9 +93,10 @@ uv run ruff check .
   `Date,Payee,Memo,Outflow,Inflow` (dates as `YYYY-MM-DD`; `Outflow`/`Inflow`
   are non-negative amounts, only one populated per row). This is the format
   this tool produces.
-- YNAB categories cannot be set via CSV import, so the PostFinance-assigned
-  category (and any user-set label) is carried over into the `Memo` field
-  instead, for reference when categorizing in YNAB.
+- YNAB categories cannot be set via CSV import. `Memo` is left empty by
+  default; pass `-c`/`--category-memo` to carry the PostFinance-assigned
+  category (and any user-set label) into it instead, for reference when
+  categorizing in YNAB -- or use `-i`/`--interactive-memo` to type your own.
 - YNAB automatically deduplicates imported transactions per account using
   an identifier derived from `date + amount + occurrence` (the Nth
   transaction seen with that exact date and amount) — it does not look at
