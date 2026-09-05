@@ -28,6 +28,26 @@ warnings but don't block the conversion.
 Deduplication of transactions already present in your YNAB budget is left
 entirely to YNAB itself — see "Notes on YNAB import" below.
 
+## Configuration
+
+Settings are read from a TOML file at `$XDG_CONFIG_HOME/pftoynab/config.toml`
+(defaulting to `~/.config/pftoynab/config.toml` if `$XDG_CONFIG_HOME` isn't
+set). The file is optional; without one, no prefixes are stripped.
+
+```toml
+[payee]
+# Generic PostFinance prefixes (e.g. "payment to") stripped from the start
+# of the payee text. Matched in order, first match wins. A trailing space
+# is optional -- any whitespace right after the matched prefix is removed
+# either way.
+strip_prefixes = [
+    "Gutschrift von ",
+    "Lastschrift an ",
+    "TWINT Kauf/Dienstleistung ",
+    "CH-DD ",
+]
+```
+
 ## Development
 
 ```sh
@@ -53,6 +73,7 @@ uv run ruff check .
   transactions stay in a consistent relative order across exports (which
   PostFinance does). This tool sorts output chronologically while
   preserving each day's original relative order for exactly this reason.
-- Payee matching/renaming (e.g. mapping "TWINT Kauf/Dienstleistung Coop-5646
-  ..." to a clean "Coop" payee) is handled by YNAB's own Payee Rename Rules
-  after import, not by this tool.
+- Beyond the generic prefix stripping this tool does (see Configuration),
+  further payee matching/renaming (e.g. mapping "Coop-5646 Zürich Enge
+  Bahnhof" to a clean "Coop" payee) is handled by YNAB's own Payee Rename
+  Rules after import.

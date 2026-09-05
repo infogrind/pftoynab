@@ -1,0 +1,11 @@
+Datum von:;="01.01.2026"
+Datum bis:;="31.01.2026"
+Kategorie:;="Alle"
+Konto:;="CH0000000000000000000"
+Währung:;="CHF"
+
+Datum;Avisierungstext;Gutschrift in CHF;Lastschrift in CHF;Label;Kategorie;Valuta;Saldo in CHF
+
+15.01.2026;"TWINT Kauf/Dienstleistung Migros Beispielplatz";;-23.45;;Einkaufen // Supermärkte;15.01.2026;10000.00
+14.01.2026;"Gutschrift von Beispiel Arbeitgeber AG";5000;;;Einkommen;14.01.2026;10028.05
+13.01.2026;"Lastschrift an Muster Versicherung AG

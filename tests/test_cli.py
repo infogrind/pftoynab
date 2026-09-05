@@ -136,6 +136,44 @@ def test_undecodable_file_rejected(tmp_path, capsys):
     assert "could not decode" in capsys.readouterr().err
 
 
+def test_config_file_strip_prefixes_applied_end_to_end(tmp_path, monkeypatch):
+    xdg_config_home = tmp_path / "xdg-config"
+    config_dir = xdg_config_home / "pftoynab"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.toml").write_text(
+        '[payee]\nstrip_prefixes = ["Gutschrift von", "Lastschrift an"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config_home))
+
+    input_csv = write(
+        tmp_path / "export.csv",
+        build_export([row(desc="Lastschrift an Wingo", debit="-10", credit="")]),
+    )
+
+    exit_code = cli.main([str(input_csv)])
+
+    assert exit_code == 0
+    output = (tmp_path / "export_ynab.csv").read_text(encoding="utf-8")
+    assert "Wingo" in output
+    assert "Lastschrift an Wingo" not in output
+
+
+def test_invalid_config_file_reported_as_error(tmp_path, monkeypatch, capsys):
+    xdg_config_home = tmp_path / "xdg-config"
+    config_dir = xdg_config_home / "pftoynab"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.toml").write_text("not [valid toml", encoding="utf-8")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config_home))
+
+    input_csv = write(tmp_path / "export.csv", build_export([row()]))
+
+    exit_code = cli.main([str(input_csv)])
+
+    assert exit_code == 1
+    assert "not valid TOML" in capsys.readouterr().err
+
+
 def test_warnings_are_printed_but_conversion_still_succeeds(tmp_path, capsys):
     input_csv = write(tmp_path / "export.csv", build_export([row(desc="=malicious")]))
 

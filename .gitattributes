@@ -1,0 +1,5 @@
+# Test fixtures must be stored and checked out byte-for-byte -- some are
+# deliberately CRLF (matching this tool's real CSV output), others
+# deliberately truncated or malformed. Line-ending normalization would
+# silently corrupt them regardless of a contributor's core.autocrlf.
+tests/testdata/** -text

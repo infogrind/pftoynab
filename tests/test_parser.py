@@ -199,6 +199,44 @@ def test_label_and_kategorie_combined_into_memo():
     assert transactions[0].memo == "Vacation | Freizeit // Reisen"
 
 
+def test_strip_prefixes_removes_configured_prefix():
+    text = build_export([row(desc="TWINT Kauf/Dienstleistung Coop Zürich")])
+    transactions, _ = parse_postfinance_csv(text, strip_prefixes=["TWINT Kauf/Dienstleistung "])
+    assert transactions[0].payee == "Coop Zürich"
+
+
+def test_strip_prefixes_works_without_trailing_space_in_config():
+    text = build_export([row(desc="Lastschrift an Wingo")])
+    transactions, _ = parse_postfinance_csv(text, strip_prefixes=["Lastschrift an"])
+    assert transactions[0].payee == "Wingo"
+
+
+def test_strip_prefixes_only_applies_first_match():
+    text = build_export([row(desc="Gutschrift von ACME AG")])
+    transactions, _ = parse_postfinance_csv(
+        text, strip_prefixes=["Lastschrift an", "Gutschrift von"]
+    )
+    assert transactions[0].payee == "ACME AG"
+
+
+def test_strip_prefixes_no_match_leaves_payee_unchanged():
+    text = build_export([row(desc="Some other payee")])
+    transactions, _ = parse_postfinance_csv(text, strip_prefixes=["Gutschrift von"])
+    assert transactions[0].payee == "Some other payee"
+
+
+def test_strip_prefixes_empty_string_entry_ignored():
+    text = build_export([row(desc="Normal payee")])
+    transactions, _ = parse_postfinance_csv(text, strip_prefixes=[""])
+    assert transactions[0].payee == "Normal payee"
+
+
+def test_strip_prefixes_stripping_to_empty_is_a_validation_error():
+    text = build_export([row(desc="CH-DD")])
+    with pytest.raises(PftoynabError, match="description/payee is empty"):
+        parse_postfinance_csv(text, strip_prefixes=["CH-DD"])
+
+
 def test_extra_trailing_columns_tolerated():
     # A row with more columns than the mapped ones (e.g. a future PostFinance
     # export adding a new trailing column) should not be rejected.

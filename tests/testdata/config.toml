@@ -1,0 +1,7 @@
+[payee]
+strip_prefixes = [
+    "Gutschrift von ",
+    "Lastschrift an ",
+    "TWINT Kauf/Dienstleistung ",
+    "CH-DD ",
+]

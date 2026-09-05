@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><title>Sitzung abgelaufen</title></head>
+<body>
+<h1>Ihre Sitzung ist abgelaufen</h1>
+<p>Bitte melden Sie sich erneut an, um Ihre Kontobewegungen herunterzuladen.</p>
+<a href="/login">Erneut anmelden</a>
+</body>
+</html>

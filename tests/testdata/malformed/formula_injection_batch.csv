@@ -1,0 +1,15 @@
+Datum von:;="01.01.2026"
+Datum bis:;="31.01.2026"
+Kategorie:;="Alle"
+Konto:;="CH0000000000000000000"
+Währung:;="CHF"
+
+Datum;Avisierungstext;Gutschrift in CHF;Lastschrift in CHF;Label;Kategorie;Valuta;Saldo in CHF
+
+15.01.2026;"=HYPERLINK(""http://evil.example"",""Klick hier"")";50;;;Sonstige Einnahmen;15.01.2026;10000.00
+14.01.2026;"+41000000001@evil.example";50;;;Sonstige Einnahmen;14.01.2026;10050.00
+13.01.2026;"-2+3+cmd|' /c calc'!A1";50;;;Sonstige Einnahmen;13.01.2026;10100.00
+12.01.2026;"@SUM(1+1)*cmd|' /c calc'!A1";50;;;Sonstige Einnahmen;12.01.2026;10150.00
+
+Disclaimer:
+Der Dokumentinhalt wurde durch Filtereinstellungen der Kund:innen generiert.

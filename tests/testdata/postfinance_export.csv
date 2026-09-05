@@ -1,0 +1,23 @@
+Datum von:;="01.01.2026"
+Datum bis:;="31.01.2026"
+Kategorie:;="Alle"
+Konto:;="CH0000000000000000000"
+Währung:;="CHF"
+
+Datum;Avisierungstext;Gutschrift in CHF;Lastschrift in CHF;Label;Kategorie;Valuta;Saldo in CHF
+
+15.01.2026;"TWINT Kauf/Dienstleistung Migros Beispielplatz";;-23.45;;Einkaufen // Supermärkte;15.01.2026;10000.00
+15.01.2026;"TWINT Kauf/Dienstleistung Café Zürisee";;-4.60;;Freizeit // Gastronomie;15.01.2026;10023.45
+14.01.2026;"Gutschrift von Beispiel Arbeitgeber AG";5000;;;Einkommen;14.01.2026;10028.05
+13.01.2026;"Lastschrift an Muster Versicherung AG";;-245.30;;Finanzen // Versicherungen;13.01.2026;5028.05
+12.01.2026;"Bargeldbezug vom 12.01.2026, Bahnhof Zürich HB";;-200;;Finanzen // Bargeldbezug;12.01.2026;5273.35
+11.01.2026;"CH-DD PostFinance, Kreditkarten";;-389.90;;Überträge;11.01.2026;5473.35
+10.01.2026;"TWINT Geld senden an +41000000001";;-50;Geschenk;Finanzen // Sonstige Geldtransfers;10.01.2026;5863.25
+09.01.2026;"Lastschrift an Beispiel Kindertagesstätte";;-1200;;Sonstige Ausgaben;09.01.2026;5913.25
+08.01.2026;"Preis für Bankpaket Smart";;-5;;Finanzen // Gebühren;08.01.2026;7113.25
+07.01.2026;"TWINT Kauf/Dienstleistung Käserei Beispiel";;-11.20;;Einkaufen // Detail-Lebensmittel;07.01.2026;7118.25
+06.01.2026;"TWINT Kauf/Dienstleistung Bäckerei
+Sonnenschein";;-6.80;;Einkaufen // Detail-Lebensmittel;06.01.2026;7125.05
+
+Disclaimer:
+Der Dokumentinhalt wurde durch Filtereinstellungen der Kund:innen generiert. PostFinance ist für den Inhalt und die Vollständigkeit nicht verantwortlich.

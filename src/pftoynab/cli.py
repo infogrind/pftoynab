@@ -4,6 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from .config import find_config_path, load_config
 from .errors import PftoynabError
 from .parser import parse_postfinance_csv
 from .writer import write_ynab_csv
@@ -66,8 +67,10 @@ def _run(input_path: Path, output_path: Path | None, force: bool) -> int:
             f"input file is too large ({size:,} bytes > {MAX_FILE_SIZE:,} byte limit): {input_path}"
         )
 
+    config = load_config(find_config_path())
+
     text = _load_text(input_path)
-    transactions, warnings = parse_postfinance_csv(text)
+    transactions, warnings = parse_postfinance_csv(text, strip_prefixes=config.strip_prefixes)
 
     for w in warnings:
         print(f"Warning: {w}", file=sys.stderr)

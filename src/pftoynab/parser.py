@@ -105,6 +105,20 @@ def _parse_amount(
     return value
 
 
+def _strip_configured_prefix(text: str, prefixes: list[str]) -> str:
+    """Strip the first configured prefix that matches the start of text.
+
+    Prefixes may be given with or without a trailing space in the config;
+    either way, any whitespace immediately following the matched prefix is
+    also consumed, so "Gutschrift von" and "Gutschrift von " behave the same.
+    """
+    for prefix in prefixes:
+        trimmed_prefix = prefix.rstrip()
+        if trimmed_prefix and text.startswith(trimmed_prefix):
+            return text[len(trimmed_prefix) :].lstrip()
+    return text
+
+
 def _sanitize(
     raw: str, max_len: int, field_name: str, record_no: int, warnings: list[str]
 ) -> str:
@@ -123,7 +137,11 @@ def _sanitize(
     return text
 
 
-def parse_postfinance_csv(text: str) -> tuple[list[Transaction], list[str]]:
+def parse_postfinance_csv(
+    text: str, strip_prefixes: list[str] | None = None
+) -> tuple[list[Transaction], list[str]]:
+    strip_prefixes = strip_prefixes or []
+
     if "\x00" in text:
         raise PftoynabError(
             "input file contains null bytes; this does not look like a valid CSV export"
@@ -211,7 +229,8 @@ def parse_postfinance_csv(text: str) -> tuple[list[Transaction], list[str]]:
                 )
                 continue
 
-            payee = _sanitize(row[cols["desc"]], MAX_PAYEE_LEN, "payee", record_no, warnings)
+            desc = _strip_configured_prefix(row[cols["desc"]].strip(), strip_prefixes)
+            payee = _sanitize(desc, MAX_PAYEE_LEN, "payee", record_no, warnings)
             if not payee:
                 errors.append(f"record {record_no}: description/payee is empty")
                 continue
