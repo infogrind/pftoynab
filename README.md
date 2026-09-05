@@ -3,10 +3,23 @@
 Convert a PostFinance account movements ("Bewegungen") CSV export into a
 CSV ready for YNAB's file-based import.
 
+## Installation
+
+Install via Homebrew from my personal tap,
+[infogrind/homebrew-tap](https://github.com/infogrind/homebrew-tap):
+
+```sh
+brew install infogrind/tap/pftoynab
+```
+
+(This taps `infogrind/homebrew-tap` -- Homebrew drops the `homebrew-`
+prefix in the short tap name -- and installs `pftoynab` from it in one
+step; equivalent to `brew tap infogrind/tap && brew install pftoynab`.)
+
 ## Usage
 
 ```sh
-uv run pftoynab [path to export CSV]
+pftoynab [path to export CSV]
 ```
 
 This writes `<input file name>_ynab.csv` next to the input file and prints
