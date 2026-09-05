@@ -74,6 +74,10 @@ uv run ruff check .
   PostFinance does). This tool sorts output chronologically while
   preserving each day's original relative order for exactly this reason.
 - Beyond the generic prefix stripping this tool does (see Configuration),
-  further payee matching/renaming (e.g. mapping "Coop-5646 Zürich Enge
-  Bahnhof" to a clean "Coop" payee) is handled by YNAB's own Payee Rename
-  Rules after import.
+  further payee cleanup (e.g. mapping "Coop-5646 Zürich Enge Bahnhof" to a
+  clean "Coop" payee) is handled by YNAB's own Payee Rename Rules, which
+  are self-learning: the first time you rename an imported payee to an
+  existing one (in the import review screen or later in the register),
+  YNAB records that as a rule and automatically applies the same renaming
+  to future imports with matching payee text -- so each merchant only
+  needs to be cleaned up once.
