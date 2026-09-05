@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from conftest import build_export, row
@@ -172,6 +173,72 @@ def test_invalid_config_file_reported_as_error(tmp_path, monkeypatch, capsys):
 
     assert exit_code == 1
     assert "not valid TOML" in capsys.readouterr().err
+
+
+def test_auto_detects_newest_export_in_downloads(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+
+    older = write(downloads / "export_bewegungen_20260101.csv", build_export([row()]))
+    newer = write(
+        downloads / "export_bewegungen_20260201.csv",
+        build_export([row(desc="Newer Payee")]),
+    )
+    # Force a deterministic mtime order regardless of filesystem timestamp
+    # resolution or how fast the two writes above happened to run.
+    os.utime(older, (older.stat().st_atime, older.stat().st_mtime - 100))
+
+    exit_code = cli.main([])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert f"using the newest export in Downloads: {newer}" in out
+    assert (downloads / "export_bewegungen_20260201_ynab.csv").exists()
+    assert not (downloads / "export_bewegungen_20260101_ynab.csv").exists()
+
+
+def test_auto_detect_no_matching_file_is_reported(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    (tmp_path / "Downloads").mkdir()
+
+    exit_code = cli.main([])
+
+    assert exit_code == 1
+    assert "no file matching" in capsys.readouterr().err
+
+
+def test_auto_detect_missing_downloads_directory_is_reported(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    # tmp_path/Downloads deliberately not created.
+
+    exit_code = cli.main([])
+
+    assert exit_code == 1
+    assert "downloads directory not found" in capsys.readouterr().err
+
+
+def test_auto_detect_respects_config_directory_and_glob(tmp_path, monkeypatch):
+    xdg_config_home = tmp_path / "xdg-config"
+    config_dir = xdg_config_home / "pftoynab"
+    config_dir.mkdir(parents=True)
+    custom_dir = tmp_path / "CustomExports"
+    custom_dir.mkdir()
+    (config_dir / "config.toml").write_text(
+        f'[input]\ndirectory = "{custom_dir}"\nglob = "*.txt"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config_home))
+
+    write(custom_dir / "myexport.txt", build_export([row()]))
+
+    exit_code = cli.main([])
+
+    assert exit_code == 0
+    assert (custom_dir / "myexport_ynab.csv").exists()
 
 
 def test_warnings_are_printed_but_conversion_still_succeeds(tmp_path, capsys):

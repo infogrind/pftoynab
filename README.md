@@ -6,12 +6,17 @@ CSV ready for YNAB's file-based import.
 ## Usage
 
 ```sh
-uv run pftoynab <path to export CSV>
+uv run pftoynab [path to export CSV]
 ```
 
 This writes `<input file name>_ynab.csv` next to the input file and prints
 its path. Drag that file into YNAB's "File Based Import" for the matching
 account.
+
+If the path is omitted, the newest file matching `export_bewegungen_*.csv`
+in `~/Downloads` is used automatically (both the directory and the glob
+are configurable -- see Configuration) -- handy since that's exactly the
+default filename and location a PostFinance export lands in.
 
 Options:
 
@@ -46,6 +51,12 @@ strip_prefixes = [
     "TWINT Kauf/Dienstleistung ",
     "CH-DD ",
 ]
+
+[input]
+# Where to look for an export when no path is given on the command line,
+# and which filenames count as a match. Both default to the values shown.
+directory = "~/Downloads"
+glob = "export_bewegungen_*.csv"
 ```
 
 ## Development

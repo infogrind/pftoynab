@@ -4,12 +4,26 @@ import argparse
 import sys
 from pathlib import Path
 
-from .config import find_config_path, load_config
+from .config import Config, find_config_path, load_config
 from .errors import PftoynabError
 from .parser import parse_postfinance_csv
 from .writer import write_ynab_csv
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB; a personal transaction export is orders of magnitude smaller.
+
+
+def _find_latest_export(config: Config) -> Path:
+    directory = Path(config.input_directory).expanduser() if config.input_directory else Path.home() / "Downloads"
+    if not directory.is_dir():
+        raise PftoynabError(f"downloads directory not found: {directory}")
+
+    matches = [p for p in directory.glob(config.input_glob) if p.is_file()]
+    if not matches:
+        raise PftoynabError(
+            f"no file matching {config.input_glob!r} found in {directory}; "
+            "pass a file path explicitly"
+        )
+    return max(matches, key=lambda p: p.stat().st_mtime)
 
 
 def _load_text(path: Path) -> str:
@@ -34,7 +48,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "input_csv",
         type=Path,
-        help="Path to the PostFinance CSV export (e.g. export_bewegungen_....csv)",
+        nargs="?",
+        default=None,
+        help=(
+            "Path to the PostFinance CSV export (e.g. export_bewegungen_....csv). "
+            "If omitted, the newest file matching the configured glob "
+            "(default: export_bewegungen_*.csv) in ~/Downloads is used."
+        ),
     )
     parser.add_argument(
         "-o",
@@ -51,8 +71,14 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run(input_path: Path, output_path: Path | None, force: bool) -> int:
-    input_path = input_path.expanduser()
+def _run(input_path: Path | None, output_path: Path | None, force: bool) -> int:
+    config = load_config(find_config_path())
+
+    if input_path is None:
+        input_path = _find_latest_export(config)
+        print(f"No input file given; using the newest export in Downloads: {input_path}")
+    else:
+        input_path = input_path.expanduser()
 
     if not input_path.exists():
         raise PftoynabError(f"input file not found: {input_path}")
@@ -66,8 +92,6 @@ def _run(input_path: Path, output_path: Path | None, force: bool) -> int:
         raise PftoynabError(
             f"input file is too large ({size:,} bytes > {MAX_FILE_SIZE:,} byte limit): {input_path}"
         )
-
-    config = load_config(find_config_path())
 
     text = _load_text(input_path)
     transactions, warnings = parse_postfinance_csv(text, strip_prefixes=config.strip_prefixes)
