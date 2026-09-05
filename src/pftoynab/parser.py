@@ -118,6 +118,17 @@ def _parse_amount(
     return value
 
 
+def signed_amount(t: Transaction) -> Decimal:
+    """Amount as YNAB will treat it: negative for an outflow, positive for an inflow.
+
+    Exactly one of outflow/inflow is populated by _parse_row, so this is total.
+    """
+    if t.outflow is not None:
+        return -t.outflow
+    assert t.inflow is not None
+    return t.inflow
+
+
 def _strip_configured_prefix(text: str, prefixes: list[str]) -> str:
     """Strip the first configured prefix that matches the start of text.
 
@@ -216,6 +227,34 @@ def _parse_row(
     return Transaction(txn_date, payee, memo, outflow, inflow)
 
 
+def _warn_about_ambiguous_dedup_groups(transactions: list[Transaction], warnings: list[str]) -> None:
+    """Flag transactions YNAB's own deduplication can't tell apart by content.
+
+    YNAB deduplicates imported transactions per account using date + amount +
+    "occurrence" (the Nth transaction seen with that exact date and amount)
+    -- it never looks at payee or memo. So when several transactions share a
+    date and amount, re-importing an overlapping date range is only safe for
+    them if their relative order is identical across both exports. This tool
+    preserves PostFinance's original row order (see the sort below), but it
+    has no visibility into any other export, so it can only flag the
+    ambiguity, not confirm the order will actually hold up.
+    """
+    groups: dict[tuple[date, Decimal], list[Transaction]] = {}
+    for t in transactions:
+        groups.setdefault((t.txn_date, signed_amount(t)), []).append(t)
+
+    for (txn_date, amount), group in groups.items():
+        if len(group) < 2:
+            continue
+        occurrences = ", ".join(f"#{i} {t.payee!r}" for i, t in enumerate(group, start=1))
+        warnings.append(
+            f"{len(group)} transactions on {txn_date.isoformat()} share amount {amount:.2f}; "
+            "YNAB distinguishes these only by their relative import order (occurrence "
+            "1, 2, ...), not by payee/memo, so re-importing an overlapping date range is "
+            f"only safe if that order matches this export's: {occurrences}"
+        )
+
+
 def parse_postfinance_csv(
     text: str, strip_prefixes: list[str] | None = None
 ) -> tuple[list[Transaction], list[str]]:
@@ -296,5 +335,7 @@ def parse_postfinance_csv(
     # detection (which counts occurrences in row order) working correctly
     # if the same period is ever imported twice.
     transactions.sort(key=lambda t: t.txn_date)
+
+    _warn_about_ambiguous_dedup_groups(transactions, warnings)
 
     return transactions, warnings

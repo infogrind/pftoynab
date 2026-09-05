@@ -237,3 +237,44 @@ def test_extra_trailing_columns_tolerated():
     text = build_export(["15.01.2026;\"Extra col\";;-5;;Kategorie;15.01.2026;1000;EXTRA"])
     transactions, _ = parse_postfinance_csv(text)
     assert len(transactions) == 1
+
+
+def test_same_date_and_amount_warns_about_ambiguous_dedup():
+    text = build_export(
+        [
+            row(date="05.01.2026", desc="Coop Zürich", debit="-20"),
+            row(date="05.01.2026", desc="Migros", debit="-20"),
+            row(date="05.01.2026", desc="Different amount", debit="-5"),
+            row(date="06.01.2026", desc="Different day", debit="-20"),
+        ]
+    )
+    _, warnings = parse_postfinance_csv(text)
+    assert len(warnings) == 1
+    w = warnings[0]
+    assert "2 transactions on 2026-01-05 share amount -20.00" in w
+    assert "#1 'Coop Zürich'" in w
+    assert "#2 'Migros'" in w
+
+
+def test_no_dedup_warning_when_dates_or_amounts_all_distinct():
+    text = build_export(
+        [
+            row(date="05.01.2026", desc="Coop Zürich", debit="-20"),
+            row(date="06.01.2026", desc="Migros", debit="-20"),
+        ]
+    )
+    _, warnings = parse_postfinance_csv(text)
+    assert warnings == []
+
+
+def test_dedup_warning_groups_by_signed_amount_not_magnitude():
+    # An outflow and an inflow of the same magnitude on the same day must
+    # not be treated as ambiguous -- YNAB tells them apart by sign.
+    text = build_export(
+        [
+            row(date="05.01.2026", desc="Coop Zürich", debit="-20", credit=""),
+            row(date="05.01.2026", desc="Refund", debit="", credit="20"),
+        ]
+    )
+    _, warnings = parse_postfinance_csv(text)
+    assert warnings == []

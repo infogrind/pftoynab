@@ -110,3 +110,8 @@ uv run ruff check .
   YNAB records that as a rule and automatically applies the same renaming
   to future imports with matching payee text -- so each merchant only
   needs to be cleaned up once.
+- Since same-date/same-amount transactions are exactly where that
+  occurrence-based deduplication depends on import order rather than
+  content, this tool warns (without blocking conversion) whenever the input
+  contains such a group, listing them in their output order so you can
+  double-check that order if you re-import an overlapping date range.

@@ -10,7 +10,7 @@ the input.
 from __future__ import annotations
 
 from .errors import PftoynabError
-from .parser import MAX_MEMO_LEN, Transaction, sanitize_field
+from .parser import MAX_MEMO_LEN, Transaction, sanitize_field, signed_amount
 
 
 def run_interactive_memo(transactions: list[Transaction]) -> list[str]:
@@ -19,9 +19,7 @@ def run_interactive_memo(transactions: list[Transaction]) -> list[str]:
     print(f"Interactive memo entry for {total} transaction(s); press Enter to leave one empty.")
 
     for i, t in enumerate(transactions, start=1):
-        # outflow/inflow are both stored as non-negative magnitudes (YNAB's CSV
-        # format requires that), so negate outflow here to show a signed amount.
-        amount = -t.outflow if t.outflow is not None else t.inflow
+        amount = signed_amount(t)
         print(f"[{i}/{total}] {t.txn_date.isoformat()}  {t.payee}  {amount:.2f}")
         try:
             raw = input("> ")
