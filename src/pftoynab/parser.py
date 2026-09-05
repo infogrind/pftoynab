@@ -132,7 +132,7 @@ def _strip_configured_prefix(text: str, prefixes: list[str]) -> str:
     return text
 
 
-def _sanitize(
+def sanitize_field(
     raw: str, max_len: int, field_name: str, record_no: int, warnings: list[str]
 ) -> str:
     text = " ".join(raw.split())
@@ -198,7 +198,7 @@ def _parse_row(
         return None
 
     desc = _strip_configured_prefix(row[cols.desc].strip(), strip_prefixes)
-    payee = _sanitize(desc, MAX_PAYEE_LEN, "payee", record_no, warnings)
+    payee = sanitize_field(desc, MAX_PAYEE_LEN, "payee", record_no, warnings)
     if not payee:
         errors.append(f"record {record_no}: description/payee is empty")
         return None
@@ -208,7 +208,7 @@ def _parse_row(
         for idx in (cols.label, cols.kategorie)
         if idx is not None and idx < len(row) and row[idx].strip()
     ]
-    memo = _sanitize(" | ".join(memo_parts), MAX_MEMO_LEN, "memo", record_no, warnings)
+    memo = sanitize_field(" | ".join(memo_parts), MAX_MEMO_LEN, "memo", record_no, warnings)
 
     outflow = -debit if debit is not None else None
     inflow = credit if credit is not None else None

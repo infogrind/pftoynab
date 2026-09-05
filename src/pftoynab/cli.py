@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import Config, find_config_path, load_config
 from .errors import PftoynabError
+from .interactive import run_interactive_memo
 from .parser import parse_postfinance_csv
 from .writer import write_ynab_csv
 
@@ -68,10 +69,19 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Overwrite the output file if it already exists",
     )
+    parser.add_argument(
+        "-i",
+        "--interactive-memo",
+        action="store_true",
+        help=(
+            "Interactively type a Memo for each transaction, in date order, instead of "
+            "using the one derived from the input's Label/Kategorie columns"
+        ),
+    )
     return parser
 
 
-def _run(input_path: Path | None, output_path: Path | None, force: bool) -> int:
+def _run(input_path: Path | None, output_path: Path | None, force: bool, interactive_memo: bool) -> int:
     config = load_config(find_config_path())
 
     if input_path is None:
@@ -111,6 +121,12 @@ def _run(input_path: Path | None, output_path: Path | None, force: bool) -> int:
             f"output file already exists: {output_path} (use --force to overwrite)"
         )
 
+    if interactive_memo:
+        interactive_warnings = run_interactive_memo(transactions)
+        warnings += interactive_warnings
+        for w in interactive_warnings:
+            print(f"Warning: {w}", file=sys.stderr)
+
     write_ynab_csv(transactions, output_path)
 
     print(f"Wrote {len(transactions)} transaction(s) to {output_path}; ready for import into YNAB.")
@@ -123,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
-        return _run(args.input_csv, args.output, args.force)
+        return _run(args.input_csv, args.output, args.force, args.interactive_memo)
     except PftoynabError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1

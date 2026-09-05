@@ -24,6 +24,38 @@ def test_successful_conversion_end_to_end(tmp_path, capsys):
     assert "ready for import into YNAB" in out
 
 
+def test_interactive_memo_flag_overrides_derived_memo(tmp_path, monkeypatch):
+    input_csv = write(
+        tmp_path / "export.csv",
+        build_export([row(date="02.01.2026", kategorie="Einkaufen"), row(date="01.01.2026", kategorie="Einkommen")]),
+    )
+    answers = iter(["first", "second"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+
+    exit_code = cli.main([str(input_csv), "-i"])
+
+    assert exit_code == 0
+    output_csv = tmp_path / "export_ynab.csv"
+    lines = output_csv.read_text(encoding="utf-8").splitlines()
+    assert lines[1].split(",")[2] == "first"  # 01.01.2026, entered first (ascending date order)
+    assert lines[2].split(",")[2] == "second"
+
+
+def test_interactive_memo_not_prompted_when_output_already_exists(tmp_path, monkeypatch, capsys):
+    input_csv = write(tmp_path / "export.csv", build_export([row()]))
+    (tmp_path / "export_ynab.csv").write_text("existing content")
+
+    def fail_if_called(prompt):
+        raise AssertionError("input() should not be called when the output check fails first")
+
+    monkeypatch.setattr("builtins.input", fail_if_called)
+
+    exit_code = cli.main([str(input_csv), "-i"])
+
+    assert exit_code == 1
+    assert "already exists" in capsys.readouterr().err
+
+
 def test_missing_input_file(tmp_path, capsys):
     exit_code = cli.main([str(tmp_path / "nope.csv")])
     assert exit_code == 1

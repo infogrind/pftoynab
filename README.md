@@ -35,6 +35,11 @@ Options:
 
 - `-o, --output PATH` — write to a specific output path instead of the default.
 - `--force` — overwrite the output file if it already exists.
+- `-i, --interactive-memo` — after parsing, walk through every transaction in
+  date order and type a `Memo` for each (Enter to leave one empty), instead
+  of using the one auto-derived from the input's `Label`/`Kategorie`
+  columns. Handy since PostFinance's auto-assigned `Kategorie` is often not
+  useful as-is.
 
 The script validates the input thoroughly and refuses to write output if
 anything looks wrong (unparsable dates/amounts, ambiguous or missing
