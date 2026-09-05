@@ -1,8 +1,9 @@
 [project]
 name = "pftoynab"
 version = "0.1.0"
-description = "Add your description here"
+description = "Convert PostFinance CSV account exports into YNAB's file-based import format"
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "Marius Kleiner", email = "kleiner@gmail.com" }
 ]
