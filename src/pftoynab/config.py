@@ -29,6 +29,7 @@ class Config:
     input_directory: str | None = None
     input_glob: str = DEFAULT_INPUT_GLOB
     credit_card_glob: str = DEFAULT_CREDIT_CARD_GLOB
+    transfer_checking_account: str | None = None
 
 
 def find_config_path() -> Path:
@@ -77,9 +78,18 @@ def load_config(path: Path) -> Config:
     if not isinstance(credit_card_glob, str):
         raise PftoynabError(f"config file {path}: input.credit_card_glob must be a string")
 
+    transfers_section = data.get("transfers", {})
+    if not isinstance(transfers_section, dict):
+        raise PftoynabError(f"config file {path}: [transfers] must be a table")
+
+    transfer_checking_account = transfers_section.get("checking_account")
+    if transfer_checking_account is not None and not isinstance(transfer_checking_account, str):
+        raise PftoynabError(f"config file {path}: transfers.checking_account must be a string")
+
     return Config(
         strip_prefixes=strip_prefixes,
         input_directory=input_directory,
         input_glob=input_glob,
         credit_card_glob=credit_card_glob,
+        transfer_checking_account=transfer_checking_account,
     )

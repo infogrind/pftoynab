@@ -127,7 +127,10 @@ def _run(
 
     text = _load_text(input_path)
     transactions, warnings = parse_postfinance_csv(
-        text, strip_prefixes=config.strip_prefixes, include_category_memo=category_memo
+        text,
+        strip_prefixes=config.strip_prefixes,
+        include_category_memo=category_memo,
+        transfer_checking_account=config.transfer_checking_account,
     )
 
     for w in warnings:

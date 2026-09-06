@@ -314,6 +314,42 @@ def test_credit_card_export_label_and_kategorie_combined_into_memo():
     assert transactions[0].memo == "Vacation | Freizeit // Reisen"
 
 
+def test_credit_card_payment_rewritten_as_transfer_when_configured():
+    text = build_credit_card_export(
+        [credit_card_row(desc="2002 IHRE ZAHLUNG", debit="", credit="1360.30")]
+    )
+    transactions, warnings = parse_postfinance_csv(
+        text, transfer_checking_account="Postfinance R&M"
+    )
+    assert transactions[0].payee == "Transfer : Postfinance R&M"
+    assert transactions[0].inflow == Decimal("1360.30")
+    assert any("rewrote '2002 IHRE ZAHLUNG'" in w for w in warnings)
+    assert any("duplicate" in w for w in warnings)
+
+
+def test_credit_card_payment_match_is_case_insensitive():
+    text = build_credit_card_export(
+        [credit_card_row(desc="2002 ihre zahlung", debit="", credit="500")]
+    )
+    transactions, _ = parse_postfinance_csv(text, transfer_checking_account="Checking")
+    assert transactions[0].payee == "Transfer : Checking"
+
+
+def test_credit_card_payment_not_rewritten_without_configured_account():
+    text = build_credit_card_export(
+        [credit_card_row(desc="2002 IHRE ZAHLUNG", debit="", credit="1360.30")]
+    )
+    transactions, warnings = parse_postfinance_csv(text)
+    assert transactions[0].payee == "2002 IHRE ZAHLUNG"
+    assert warnings == []
+
+
+def test_unrelated_description_not_rewritten_as_transfer():
+    text = build_credit_card_export([credit_card_row(desc="Apple Pay - Coop Zürich")])
+    transactions, _ = parse_postfinance_csv(text, transfer_checking_account="Postfinance R&M")
+    assert transactions[0].payee == "Apple Pay - Coop Zürich"
+
+
 def test_dedup_warning_groups_by_signed_amount_not_magnitude():
     # An outflow and an inflow of the same magnitude on the same day must
     # not be treated as ambiguous -- YNAB tells them apart by sign.

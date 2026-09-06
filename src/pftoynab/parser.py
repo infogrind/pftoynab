@@ -46,6 +46,12 @@ FORMULA_TRIGGER_CHARS = ("=", "+", "-", "@")
 
 _AMOUNT_RE = re.compile(r"[+-]?\d+(\.\d+)?")
 
+# PostFinance's fixed description for a credit card bill payment coming in
+# from the linked checking account. Recognized so it can be rewritten into
+# YNAB's special transfer payee instead of importing as plain income -- see
+# transfer_checking_account below.
+TRANSFER_TRIGGER_DESC = "2002 IHRE ZAHLUNG"
+
 
 @dataclass
 class Transaction:
@@ -193,6 +199,7 @@ def _parse_row(
     expected_ncols: int,
     strip_prefixes: list[str],
     include_category_memo: bool,
+    transfer_checking_account: str | None,
     errors: list[str],
     warnings: list[str],
 ) -> Transaction | None:
@@ -234,11 +241,20 @@ def _parse_row(
         )
         return None
 
-    desc = _strip_configured_prefix(row[cols.desc].strip(), strip_prefixes)
-    payee = sanitize_field(desc, MAX_PAYEE_LEN, "payee", record_no, warnings)
-    if not payee:
-        errors.append(f"record {record_no}: description/payee is empty")
-        return None
+    raw_desc = row[cols.desc].strip()
+    if transfer_checking_account and raw_desc.casefold() == TRANSFER_TRIGGER_DESC.casefold():
+        payee = f"Transfer : {transfer_checking_account}"
+        warnings.append(
+            f"record {record_no}: rewrote {raw_desc!r} as a transfer to/from "
+            f"{transfer_checking_account!r} -- make sure the matching entry on that "
+            "account isn't also imported separately, or YNAB will create a duplicate"
+        )
+    else:
+        desc = _strip_configured_prefix(raw_desc, strip_prefixes)
+        payee = sanitize_field(desc, MAX_PAYEE_LEN, "payee", record_no, warnings)
+        if not payee:
+            errors.append(f"record {record_no}: description/payee is empty")
+            return None
 
     if include_category_memo:
         memo_parts = [
@@ -288,6 +304,7 @@ def parse_postfinance_csv(
     text: str,
     strip_prefixes: list[str] | None = None,
     include_category_memo: bool = False,
+    transfer_checking_account: str | None = None,
 ) -> tuple[list[Transaction], list[str]]:
     strip_prefixes = strip_prefixes or []
 
@@ -347,6 +364,7 @@ def parse_postfinance_csv(
                 expected_ncols,
                 strip_prefixes,
                 include_category_memo,
+                transfer_checking_account,
                 errors,
                 warnings,
             )

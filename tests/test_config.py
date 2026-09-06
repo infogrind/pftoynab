@@ -106,6 +106,37 @@ def test_credit_card_glob_not_a_string_raises(tmp_path):
         load_config(config_file)
 
 
+def test_loads_transfers_section(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '[transfers]\nchecking_account = "Postfinance R&M"\n',
+        encoding="utf-8",
+    )
+    config = load_config(config_file)
+    assert config.transfer_checking_account == "Postfinance R&M"
+
+
+def test_missing_transfers_section_returns_default(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("# no [transfers] section here\n", encoding="utf-8")
+    config = load_config(config_file)
+    assert config.transfer_checking_account is None
+
+
+def test_transfers_not_a_table_raises(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("transfers = 5\n", encoding="utf-8")
+    with pytest.raises(PftoynabError, match=r"\[transfers\] must be a table"):
+        load_config(config_file)
+
+
+def test_transfer_checking_account_not_a_string_raises(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("[transfers]\nchecking_account = 5\n", encoding="utf-8")
+    with pytest.raises(PftoynabError, match="transfers.checking_account must be a string"):
+        load_config(config_file)
+
+
 def test_find_config_path_defaults_to_dot_config(monkeypatch, tmp_path):
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)

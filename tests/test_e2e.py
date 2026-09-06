@@ -66,6 +66,19 @@ def test_credit_card_export_matches_golden_output(tmp_path):
     assert output_csv.read_bytes() == golden
 
 
+def test_credit_card_payment_rewritten_as_transfer_with_configured_account(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "find_config_path", lambda: TESTDATA / "config_with_transfer.toml")
+    input_csv = _copy(tmp_path, "postfinance_credit_card_export.csv")
+    output_csv = tmp_path / "output.csv"
+
+    exit_code = cli.main([str(input_csv), "-o", str(output_csv)])
+
+    assert exit_code == 0
+    golden = (TESTDATA / "postfinance_credit_card_export_ynab_transfer_golden.csv").read_bytes()
+    assert output_csv.read_bytes() == golden
+    assert "rewrote '2002 IHRE ZAHLUNG'" in capsys.readouterr().err
+
+
 def test_html_error_page_instead_of_csv_is_rejected(tmp_path, capsys):
     # A very real mistake: the online-banking session expired and the user
     # saved the browser's error page instead of the actual export.

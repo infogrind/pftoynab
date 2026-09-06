@@ -58,21 +58,17 @@ Bigger effort than the watermark idea, but more fundamentally solves
 several problems at once (this one, dedup ambiguity, and the manual
 drag-and-drop step itself).
 
-## Mark credit card bill payments as transfers
+## Detect the checking-account side of a credit card transfer too
 
-Credit card statement exports contain a `"2002 IHRE ZAHLUNG"` row for each
-payment of the bill from the linked checking account -- really a transfer,
-not income, but YNAB's file-based CSV import has no field for marking a
-row as a transfer, so it lands as a plain Inflow today (see "Notes on YNAB
-import" in the README).
-
-YNAB does recognize a special payee value on CSV import,
-`"Transfer : <Account Name>"`, that turns a row into a real transfer
-instead of a plain external transaction. Since `"2002 IHRE ZAHLUNG"` is a
-fixed, reliably-matchable description, this tool could rewrite just that
-payee to `Transfer : <configured checking account name>` automatically
-(via a new config option naming the paired checking account), removing
-the manual fixup step. Not done yet since it only came up in passing while
-adding credit card export support, and needs checking exactly how strict
-YNAB is about the account name matching an existing account in the target
-budget.
+Credit card bill payments can now be rewritten to YNAB's
+`"Transfer : <Account Name>"` payee via `transfers.checking_account` (see
+README), but only on the credit card export's `"2002 IHRE ZAHLUNG"` row.
+The matching outflow on the checking account side (typically labeled
+`"CH-DD PostFinance, Kreditkarten"`) is not detected or rewritten, so
+importing that row normally works fine on its own -- but if it's
+*also* imported after the credit card side already created the transfer
+automatically, that's a duplicate. Could extend the same rewriting to the
+checking-account export (matching on the fixed description instead), but
+that needs the credit card's account name configured symmetrically, and
+carries the same "don't import both halves" caveat in the other
+direction, so it wasn't done together with the credit card side.

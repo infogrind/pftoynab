@@ -35,12 +35,12 @@ content, so no flag is needed to say which one you're converting:
   `export_kreditkartenuebersicht_....csv`. The `Date` column uses
   `Buchungsdatum` (posting date), matching the same posting-date semantics
   `Datum` has for account movements; the statement's separate
-  `Einkaufsdatum` (purchase date) column is not used. Note that a credit
-  card bill payment row (`"2002 IHRE ZAHLUNG"`) is really a transfer from
-  your checking account, not income -- YNAB's file-based CSV import has no
-  way to mark a row as a transfer, so it comes through as a plain Inflow;
-  fix it up manually in YNAB (turn it into a transfer to/from the paying
-  account) after import.
+  `Einkaufsdatum` (purchase date) column is not used. A credit card bill
+  payment row (`"2002 IHRE ZAHLUNG"`) is really a transfer from your
+  checking account, not income; set `transfers.checking_account` (see
+  Configuration) to have it rewritten to YNAB's special transfer payee
+  automatically, or leave it unset to import it as a plain Inflow and fix
+  it up manually in YNAB instead.
 
 If the path is omitted, the newest file matching either configured glob
 (`export_bewegungen_*.csv` or `export_kreditkartenuebersicht_*.csv`) in
@@ -96,7 +96,22 @@ strip_prefixes = [
 directory = "~/Downloads"
 glob = "export_bewegungen_*.csv"
 credit_card_glob = "export_kreditkartenuebersicht_*.csv"
+
+[transfers]
+# Credit card exports only. When set, a credit card bill payment row
+# ("2002 IHRE ZAHLUNG") gets its Payee rewritten to "Transfer : <name>"
+# instead of importing as a plain Inflow -- YNAB recognizes that special
+# payee and turns the row into a real transfer. <name> must exactly match
+# an existing account name in your YNAB budget (the checking account the
+# payment came from). Unset by default (no rewriting).
+checking_account = "Postfinance R&M"
 ```
+
+With `transfers.checking_account` set, make sure the matching entry
+doesn't also get imported on the checking account's own side (e.g. a
+`"CH-DD PostFinance, Kreditkarten"` row there) -- YNAB creates the other
+half of a transfer automatically, so importing both halves separately
+creates a duplicate.
 
 ## Development
 
