@@ -1,6 +1,6 @@
 [project]
 name = "pftoynab"
-version = "0.3.0"
+version = "0.4.0"
 description = "Convert PostFinance CSV account exports into YNAB's file-based import format"
 readme = "README.md"
 license = "MIT"
