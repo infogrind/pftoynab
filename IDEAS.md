@@ -57,3 +57,22 @@ Instead of writing a CSV for manual drag-and-drop import, use YNAB's API
 Bigger effort than the watermark idea, but more fundamentally solves
 several problems at once (this one, dedup ambiguity, and the manual
 drag-and-drop step itself).
+
+## Mark credit card bill payments as transfers
+
+Credit card statement exports contain a `"2002 IHRE ZAHLUNG"` row for each
+payment of the bill from the linked checking account -- really a transfer,
+not income, but YNAB's file-based CSV import has no field for marking a
+row as a transfer, so it lands as a plain Inflow today (see "Notes on YNAB
+import" in the README).
+
+YNAB does recognize a special payee value on CSV import,
+`"Transfer : <Account Name>"`, that turns a row into a real transfer
+instead of a plain external transaction. Since `"2002 IHRE ZAHLUNG"` is a
+fixed, reliably-matchable description, this tool could rewrite just that
+payee to `Transfer : <configured checking account name>` automatically
+(via a new config option naming the paired checking account), removing
+the manual fixup step. Not done yet since it only came up in passing while
+adding credit card export support, and needs checking exactly how strict
+YNAB is about the account name matching an existing account in the target
+budget.

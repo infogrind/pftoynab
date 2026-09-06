@@ -1,12 +1,18 @@
-"""Parsing and validation of PostFinance "Bewegungen" CSV exports.
+"""Parsing and validation of PostFinance CSV exports.
 
-The exported file is not a plain data table: it starts with a metadata
-preamble (date range, account, currency), then a blank line, the real
-header row, another blank line, the data rows, a blank line, and finally
-a disclaimer footer. Column order and the exact currency label
-("Gutschrift in CHF" vs "... in EUR") can vary, so the header row is
-located by content rather than by line number, and columns are read by
-name rather than by position.
+Two export types are supported: account movements ("Bewegungen") and
+credit card statements ("Kreditkartenübersicht"). Both share the same
+overall shape -- a metadata preamble, a blank line, the real header row,
+another blank line, the data rows, a blank line, and finally a disclaimer
+footer -- but use different column names (e.g. credit card statements
+have "Buchungsdatum"/"Buchungsdetails" where account movements have
+"Datum"/"Avisierungstext", plus an extra "Einkaufsdatum" purchase-date
+column that this tool ignores in favor of "Buchungsdatum", to match the
+posting-date semantics "Datum" already has for account movements).
+Column order and the exact currency label ("Gutschrift in CHF" vs "...
+in EUR") can also vary, so the header row is located by content rather
+than by line number, and columns are read by name rather than by
+position.
 
 Validation is deliberately strict and fails loudly on anything
 unexpected (unparsable dates/amounts, ambiguous or missing amounts,
@@ -64,11 +70,29 @@ class ColumnIndices:
     kategorie: int | None
 
 
+# Known (date column, description column) header-name pairs, one per
+# supported PostFinance export type. Tried in order; the first pair fully
+# present in a row wins.
+_HEADER_PROFILES = [
+    ("datum", "avisierungstext"),  # account movements ("Bewegungen")
+    ("buchungsdatum", "buchungsdetails"),  # credit card statement ("Kreditkartenübersicht")
+]
+
+
 def _find_header(reader: Iterator[list[str]]) -> ColumnIndices:
     for row in reader:
         normalized = [_normalize(c) for c in row]
-        if "datum" not in normalized or "avisierungstext" not in normalized:
+        profile = next(
+            (
+                (date_key, desc_key)
+                for date_key, desc_key in _HEADER_PROFILES
+                if date_key in normalized and desc_key in normalized
+            ),
+            None,
+        )
+        if profile is None:
             continue
+        date_key, desc_key = profile
         credit_idx = next(
             (i for i, c in enumerate(normalized) if c.startswith("gutschrift in")), None
         )
@@ -78,8 +102,8 @@ def _find_header(reader: Iterator[list[str]]) -> ColumnIndices:
         if credit_idx is None or debit_idx is None:
             continue
         return ColumnIndices(
-            date=normalized.index("datum"),
-            desc=normalized.index("avisierungstext"),
+            date=normalized.index(date_key),
+            desc=normalized.index(desc_key),
             credit=credit_idx,
             debit=debit_idx,
             label=normalized.index("label") if "label" in normalized else None,
@@ -87,8 +111,9 @@ def _find_header(reader: Iterator[list[str]]) -> ColumnIndices:
         )
     raise PftoynabError(
         "could not find the expected PostFinance header row (looking for "
-        "'Datum', 'Avisierungstext', 'Gutschrift in ...', 'Lastschrift in ...'). "
-        "Is this a PostFinance account movements ('Bewegungen') CSV export?"
+        "'Datum'+'Avisierungstext' (account movements) or 'Buchungsdatum'+"
+        "'Buchungsdetails' (credit card statement), plus 'Gutschrift in ...' "
+        "and 'Lastschrift in ...'). Is this a PostFinance CSV export?"
     )
 
 

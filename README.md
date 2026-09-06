@@ -1,7 +1,8 @@
 # pftoynab
 
-Convert a PostFinance account movements ("Bewegungen") CSV export into a
-CSV ready for YNAB's file-based import.
+Convert a PostFinance account movements ("Bewegungen") or credit card
+statement ("Kreditkartenübersicht") CSV export into a CSV ready for
+YNAB's file-based import.
 
 ## Installation
 
@@ -26,10 +27,26 @@ This writes `<input file name>_ynab.csv` next to the input file and prints
 its path. Drag that file into YNAB's "File Based Import" for the matching
 account.
 
-If the path is omitted, the newest file matching `export_bewegungen_*.csv`
-in `~/Downloads` is used automatically (both the directory and the glob
-are configurable -- see Configuration) -- handy since that's exactly the
-default filename and location a PostFinance export lands in.
+Both PostFinance export types are auto-detected from the file's header
+content, so no flag is needed to say which one you're converting:
+
+- Account movements ("Bewegungen"), e.g. `export_bewegungen_....csv`.
+- Credit card statements ("Kreditkartenübersicht"), e.g.
+  `export_kreditkartenuebersicht_....csv`. The `Date` column uses
+  `Buchungsdatum` (posting date), matching the same posting-date semantics
+  `Datum` has for account movements; the statement's separate
+  `Einkaufsdatum` (purchase date) column is not used. Note that a credit
+  card bill payment row (`"2002 IHRE ZAHLUNG"`) is really a transfer from
+  your checking account, not income -- YNAB's file-based CSV import has no
+  way to mark a row as a transfer, so it comes through as a plain Inflow;
+  fix it up manually in YNAB (turn it into a transfer to/from the paying
+  account) after import.
+
+If the path is omitted, the newest file matching either configured glob
+(`export_bewegungen_*.csv` or `export_kreditkartenuebersicht_*.csv`) in
+`~/Downloads` is used automatically (the directory and both globs are
+configurable -- see Configuration) -- handy since those are exactly the
+default filenames and location a PostFinance export lands in.
 
 Options:
 
@@ -74,9 +91,11 @@ strip_prefixes = [
 
 [input]
 # Where to look for an export when no path is given on the command line,
-# and which filenames count as a match. Both default to the values shown.
+# and which filenames count as a match for each export type. All three
+# default to the values shown.
 directory = "~/Downloads"
 glob = "export_bewegungen_*.csv"
+credit_card_glob = "export_kreditkartenuebersicht_*.csv"
 ```
 
 ## Development

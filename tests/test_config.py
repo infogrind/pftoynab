@@ -9,6 +9,7 @@ def test_missing_config_file_returns_defaults(tmp_path):
     assert config == Config(strip_prefixes=[])
     assert config.input_directory is None
     assert config.input_glob == "export_bewegungen_*.csv"
+    assert config.credit_card_glob == "export_kreditkartenuebersicht_*.csv"
 
 
 def test_loads_strip_prefixes(tmp_path):
@@ -59,12 +60,13 @@ def test_strip_prefixes_with_non_string_entry_raises(tmp_path):
 def test_loads_input_section(tmp_path):
     config_file = tmp_path / "config.toml"
     config_file.write_text(
-        '[input]\ndirectory = "~/Desktop"\nglob = "*.csv"\n',
+        '[input]\ndirectory = "~/Desktop"\nglob = "*.csv"\ncredit_card_glob = "cc_*.csv"\n',
         encoding="utf-8",
     )
     config = load_config(config_file)
     assert config.input_directory == "~/Desktop"
     assert config.input_glob == "*.csv"
+    assert config.credit_card_glob == "cc_*.csv"
 
 
 def test_missing_input_section_returns_defaults(tmp_path):
@@ -73,6 +75,7 @@ def test_missing_input_section_returns_defaults(tmp_path):
     config = load_config(config_file)
     assert config.input_directory is None
     assert config.input_glob == "export_bewegungen_*.csv"
+    assert config.credit_card_glob == "export_kreditkartenuebersicht_*.csv"
 
 
 def test_input_not_a_table_raises(tmp_path):
@@ -93,6 +96,13 @@ def test_input_glob_not_a_string_raises(tmp_path):
     config_file = tmp_path / "config.toml"
     config_file.write_text("[input]\nglob = 5\n", encoding="utf-8")
     with pytest.raises(PftoynabError, match="input.glob must be a string"):
+        load_config(config_file)
+
+
+def test_credit_card_glob_not_a_string_raises(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("[input]\ncredit_card_glob = 5\n", encoding="utf-8")
+    with pytest.raises(PftoynabError, match="input.credit_card_glob must be a string"):
         load_config(config_file)
 
 

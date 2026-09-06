@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from conftest import build_export, row
+from conftest import build_credit_card_export, build_export, credit_card_row, row
 
 from pftoynab import cli
 
@@ -229,6 +229,26 @@ def test_auto_detects_newest_export_in_downloads(tmp_path, monkeypatch, capsys):
     assert f"using the newest export in Downloads: {newer}" in out
     assert (downloads / "export_bewegungen_20260201_ynab.csv").exists()
     assert not (downloads / "export_bewegungen_20260101_ynab.csv").exists()
+
+
+def test_auto_detects_newest_export_across_both_globs(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+
+    older = write(downloads / "export_bewegungen_20260101.csv", build_export([row()]))
+    newer = write(
+        downloads / "export_kreditkartenuebersicht_XXXXXXXXXXXX0000_20260201.csv",
+        build_credit_card_export([credit_card_row()]),
+    )
+    os.utime(older, (older.stat().st_atime, older.stat().st_mtime - 100))
+
+    exit_code = cli.main([])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert f"using the newest export in Downloads: {newer}" in out
 
 
 def test_auto_detect_no_matching_file_is_reported(tmp_path, monkeypatch, capsys):

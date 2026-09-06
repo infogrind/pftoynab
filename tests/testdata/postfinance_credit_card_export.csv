@@ -1,0 +1,14 @@
+Kartenkonto:;0000 0000 0000 0000
+Karte:;XXXX XXXX XXXX 0000 PostFinance Mastercard Standard
+Karteninhaber:;MAX MUSTERMANN
+Kategorie:;="Alle"
+
+Rechnungsperiode;Buchungsdatum;Einkaufsdatum;Buchungsdetails;Gutschrift in CHF;Lastschrift in CHF;Label;Kategorie
+
+Aktuelle Rechnungsperiode;15.01.2026;13.01.2026;"Apple Pay - Beispiel Café AG         Zürich";;-14.50;;Freizeit // Gastronomie
+Aktuelle Rechnungsperiode;12.01.2026;11.01.2026;"6006 ZUSCHLAG CHF IM AUSLAND";;-0.35;;Finanzen // Gebühren
+Aktuelle Rechnungsperiode;12.01.2026;11.01.2026;"PAYPAL *BEISPIELSHOP     4029357733";;-59.90;;Einkaufen // Sonstiges Einkaufen
+Aktuelle Rechnungsperiode;07.01.2026;06.01.2026;"2002 IHRE ZAHLUNG";1200.00;;;
+
+Disclaimer:
+Der Dokumentinhalt wurde durch Filtereinstellungen der Kund:innen generiert. PostFinance ist für den Inhalt und die Vollständigkeit nicht verantwortlich.

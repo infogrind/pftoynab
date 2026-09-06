@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 import pytest
-from conftest import build_export, row
+from conftest import build_credit_card_export, build_export, credit_card_row, row
 
 from pftoynab.errors import PftoynabError
 from pftoynab.parser import parse_postfinance_csv
@@ -272,6 +272,46 @@ def test_no_dedup_warning_when_dates_or_amounts_all_distinct():
     )
     _, warnings = parse_postfinance_csv(text)
     assert warnings == []
+
+
+def test_credit_card_export_parsed_using_buchungsdatum():
+    text = build_credit_card_export(
+        [
+            credit_card_row(
+                buchungsdatum="15.01.2026",
+                einkaufsdatum="13.01.2026",
+                desc="Apple Pay - Coop Zürich",
+                debit="-9.15",
+            ),
+            credit_card_row(
+                rechnungsperiode="08.12.2025 − 09.01.2026",
+                buchungsdatum="07.01.2026",
+                einkaufsdatum="06.01.2026",
+                desc="2002 IHRE ZAHLUNG",
+                debit="",
+                credit="1360.30",
+            ),
+        ]
+    )
+    transactions, warnings = parse_postfinance_csv(text)
+
+    assert warnings == []
+    assert len(transactions) == 2
+    # Sorted ascending by Buchungsdatum (posting date), not Einkaufsdatum.
+    assert [t.txn_date.isoformat() for t in transactions] == ["2026-01-07", "2026-01-15"]
+    payment, purchase = transactions
+    assert payment.payee == "2002 IHRE ZAHLUNG"
+    assert payment.inflow == Decimal("1360.30")
+    assert purchase.payee == "Apple Pay - Coop Zürich"
+    assert purchase.outflow == Decimal("9.15")
+
+
+def test_credit_card_export_label_and_kategorie_combined_into_memo():
+    text = build_credit_card_export(
+        [credit_card_row(label="Vacation", kategorie="Freizeit // Reisen")]
+    )
+    transactions, _ = parse_postfinance_csv(text, include_category_memo=True)
+    assert transactions[0].memo == "Vacation | Freizeit // Reisen"
 
 
 def test_dedup_warning_groups_by_signed_amount_not_magnitude():

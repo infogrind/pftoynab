@@ -20,6 +20,7 @@ CONFIG_FILENAME = "config.toml"
 
 
 DEFAULT_INPUT_GLOB = "export_bewegungen_*.csv"
+DEFAULT_CREDIT_CARD_GLOB = "export_kreditkartenuebersicht_*.csv"
 
 
 @dataclass
@@ -27,6 +28,7 @@ class Config:
     strip_prefixes: list[str] = field(default_factory=list)
     input_directory: str | None = None
     input_glob: str = DEFAULT_INPUT_GLOB
+    credit_card_glob: str = DEFAULT_CREDIT_CARD_GLOB
 
 
 def find_config_path() -> Path:
@@ -71,8 +73,13 @@ def load_config(path: Path) -> Config:
     if not isinstance(input_glob, str):
         raise PftoynabError(f"config file {path}: input.glob must be a string")
 
+    credit_card_glob = input_section.get("credit_card_glob", DEFAULT_CREDIT_CARD_GLOB)
+    if not isinstance(credit_card_glob, str):
+        raise PftoynabError(f"config file {path}: input.credit_card_glob must be a string")
+
     return Config(
         strip_prefixes=strip_prefixes,
         input_directory=input_directory,
         input_glob=input_glob,
+        credit_card_glob=credit_card_glob,
     )

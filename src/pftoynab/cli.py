@@ -18,11 +18,16 @@ def _find_latest_export(config: Config) -> Path:
     if not directory.is_dir():
         raise PftoynabError(f"downloads directory not found: {directory}")
 
-    matches = [p for p in directory.glob(config.input_glob) if p.is_file()]
+    matches = {
+        p
+        for glob in (config.input_glob, config.credit_card_glob)
+        for p in directory.glob(glob)
+        if p.is_file()
+    }
     if not matches:
         raise PftoynabError(
-            f"no file matching {config.input_glob!r} found in {directory}; "
-            "pass a file path explicitly"
+            f"no file matching {config.input_glob!r} or {config.credit_card_glob!r} "
+            f"found in {directory}; pass a file path explicitly"
         )
     return max(matches, key=lambda p: p.stat().st_mtime)
 
@@ -44,7 +49,10 @@ def _load_text(path: Path) -> str:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pftoynab",
-        description="Convert a PostFinance account movements CSV export into a CSV ready for YNAB's file-based import.",
+        description=(
+            "Convert a PostFinance account movements or credit card statement CSV "
+            "export into a CSV ready for YNAB's file-based import."
+        ),
     )
     parser.add_argument(
         "input_csv",
@@ -52,9 +60,11 @@ def _build_parser() -> argparse.ArgumentParser:
         nargs="?",
         default=None,
         help=(
-            "Path to the PostFinance CSV export (e.g. export_bewegungen_....csv). "
-            "If omitted, the newest file matching the configured glob "
-            "(default: export_bewegungen_*.csv) in ~/Downloads is used."
+            "Path to the PostFinance CSV export (account movements, e.g. "
+            "export_bewegungen_....csv, or a credit card statement, e.g. "
+            "export_kreditkartenuebersicht_....csv). If omitted, the newest file "
+            "matching either configured glob (default: export_bewegungen_*.csv or "
+            "export_kreditkartenuebersicht_*.csv) in ~/Downloads is used."
         ),
     )
     parser.add_argument(
