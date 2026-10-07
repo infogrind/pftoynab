@@ -1,9 +1,18 @@
 import os
 from pathlib import Path
 
+import pytest
 from conftest import build_credit_card_export, build_export, credit_card_row, row
 
 from pftoynab import cli
+
+
+@pytest.fixture(autouse=True)
+def _isolate_from_user_config(tmp_path, monkeypatch):
+    # Point at an empty XDG config dir so the user's real
+    # ~/.config/pftoynab/config.toml can't leak into these tests. Tests that
+    # need a config set XDG_CONFIG_HOME themselves, overriding this.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty-xdg-config"))
 
 
 def write(path: Path, text: str) -> Path:
