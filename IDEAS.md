@@ -61,8 +61,8 @@ drag-and-drop step itself).
 ## Detect the checking-account side of a credit card transfer too
 
 Credit card bill payments can now be rewritten to YNAB's
-`"Transfer : <Account Name>"` payee via `transfers.checking_account` (see
-README), but only on the credit card export's `"2002 IHRE ZAHLUNG"` row.
+`"Transfer : <Account Name>"` payee via `--transfers` and
+`transfers.checking_account` (see README), but only on the credit card export's `"2002 IHRE ZAHLUNG"` row.
 The matching outflow on the checking account side (typically labeled
 `"CH-DD PostFinance, Kreditkarten"`) is not detected or rewritten, so
 importing that row normally works fine on its own -- but if it's

@@ -94,6 +94,15 @@ def _build_parser() -> argparse.ArgumentParser:
             "by default, since PostFinance's auto-assigned Kategorie is rarely useful as-is"
         ),
     )
+    parser.add_argument(
+        "-t",
+        "--transfers",
+        action="store_true",
+        help=(
+            "Credit card exports only: rewrite bill payment rows ('2002 IHRE ZAHLUNG') "
+            "as YNAB transfers from the account configured in transfers.checking_account"
+        ),
+    )
     return parser
 
 
@@ -103,8 +112,14 @@ def _run(
     force: bool,
     interactive_memo: bool,
     category_memo: bool,
+    transfers: bool,
 ) -> int:
-    config = load_config(find_config_path())
+    config_path = find_config_path()
+    config = load_config(config_path)
+    if transfers and not config.transfer_checking_account:
+        raise PftoynabError(
+            f"--transfers requires transfers.checking_account to be set in {config_path}"
+        )
 
     if input_path is None:
         input_path = _find_latest_export(config)
@@ -130,7 +145,7 @@ def _run(
         text,
         strip_prefixes=config.strip_prefixes,
         include_category_memo=category_memo,
-        transfer_checking_account=config.transfer_checking_account,
+        transfer_checking_account=config.transfer_checking_account if transfers else None,
     )
 
     for w in warnings:
@@ -167,7 +182,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return _run(
-            args.input_csv, args.output, args.force, args.interactive_memo, args.category_memo
+            args.input_csv,
+            args.output,
+            args.force,
+            args.interactive_memo,
+            args.category_memo,
+            args.transfers,
         )
     except PftoynabError as e:
         print(f"Error: {e}", file=sys.stderr)

@@ -71,12 +71,34 @@ def test_credit_card_payment_rewritten_as_transfer_with_configured_account(tmp_p
     input_csv = _copy(tmp_path, "postfinance_credit_card_export.csv")
     output_csv = tmp_path / "output.csv"
 
-    exit_code = cli.main([str(input_csv), "-o", str(output_csv)])
+    exit_code = cli.main([str(input_csv), "-o", str(output_csv), "--transfers"])
 
     assert exit_code == 0
     golden = (TESTDATA / "postfinance_credit_card_export_ynab_transfer_golden.csv").read_bytes()
     assert output_csv.read_bytes() == golden
     assert "rewrote '2002 IHRE ZAHLUNG'" in capsys.readouterr().err
+
+
+def test_credit_card_payment_not_rewritten_without_transfers_flag(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "find_config_path", lambda: TESTDATA / "config_with_transfer.toml")
+    input_csv = _copy(tmp_path, "postfinance_credit_card_export.csv")
+    output_csv = tmp_path / "output.csv"
+
+    exit_code = cli.main([str(input_csv), "-o", str(output_csv)])
+
+    assert exit_code == 0
+    golden = (TESTDATA / "postfinance_credit_card_export_ynab_golden.csv").read_bytes()
+    assert output_csv.read_bytes() == golden
+
+
+def test_transfers_flag_without_configured_account_is_rejected(tmp_path, capsys):
+    input_csv = _copy(tmp_path, "postfinance_credit_card_export.csv")
+
+    exit_code = cli.main([str(input_csv), "--transfers"])
+
+    assert exit_code == 1
+    assert "--transfers requires transfers.checking_account" in capsys.readouterr().err
+    assert not (tmp_path / "postfinance_credit_card_export_ynab.csv").exists()
 
 
 def test_html_error_page_instead_of_csv_is_rejected(tmp_path, capsys):
