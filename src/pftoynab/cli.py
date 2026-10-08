@@ -99,8 +99,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "--transfers",
         action="store_true",
         help=(
-            "Credit card exports only: rewrite bill payment rows ('2002 IHRE ZAHLUNG') "
-            "as YNAB transfers from the account configured in transfers.checking_account"
+            "Credit card exports only: import bill payment rows ('2002 IHRE ZAHLUNG') "
+            "as YNAB transfers from the account configured in transfers.checking_account, "
+            "instead of skipping them (the default)"
         ),
     )
     return parser
@@ -141,12 +142,17 @@ def _run(
         )
 
     text = _load_text(input_path)
+    notes: list[str] = []
     transactions, warnings = parse_postfinance_csv(
         text,
         strip_prefixes=config.strip_prefixes,
         include_category_memo=category_memo,
         transfer_checking_account=config.transfer_checking_account if transfers else None,
+        notes=notes,
     )
+
+    for n in notes:
+        print(f"Note: {n}")
 
     for w in warnings:
         print(f"Warning: {w}", file=sys.stderr)

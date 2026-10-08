@@ -37,10 +37,12 @@ content, so no flag is needed to say which one you're converting:
   `Datum` has for account movements; the statement's separate
   `Einkaufsdatum` (purchase date) column is not used. A credit card bill
   payment row (`"2002 IHRE ZAHLUNG"`) is really a transfer from your
-  checking account, not income. By default it's imported as a plain
-  Inflow; pass `-t/--transfers` (with `transfers.checking_account` set --
-  see Configuration) to have it rewritten to YNAB's special transfer payee
-  instead.
+  checking account, not income. By default it's skipped entirely (a
+  `Note:` line reports each skipped row) -- useful when the credit card
+  account's balance is reconciled against the checking account
+  separately. Pass `-t/--transfers` (with `transfers.checking_account` set
+  -- see Configuration) to import it as a transfer instead, rewritten to
+  YNAB's special transfer payee.
 
 If the path is omitted, the newest file matching either configured glob
 (`export_bewegungen_*.csv` or `export_kreditkartenuebersicht_*.csv`) in
@@ -59,10 +61,10 @@ Options:
   auto-assigned `Kategorie` is rarely useful as-is). `-i` always starts each
   prompt blank regardless of this flag, since it's meant for typing a fresh
   Memo by hand.
-- `-t, --transfers` — credit card exports only: rewrite the bill payment row
+- `-t, --transfers` — credit card exports only: import the bill payment row
   (`"2002 IHRE ZAHLUNG"`) as a YNAB transfer from the account named in
-  `transfers.checking_account`. Off by default; fails if that setting is
-  missing.
+  `transfers.checking_account`, instead of skipping it (the default).
+  Fails if that setting is missing.
 
 The script validates the input thoroughly and refuses to write output if
 anything looks wrong (unparsable dates/amounts, ambiguous or missing
@@ -104,9 +106,8 @@ credit_card_glob = "export_kreditkartenuebersicht_*.csv"
 [transfers]
 # Credit card exports only, used with -t/--transfers. With that flag, a
 # credit card bill payment row ("2002 IHRE ZAHLUNG") gets its Payee
-# rewritten to "Transfer : <name>" instead of importing as a plain Inflow
-# -- YNAB recognizes that special payee and turns the row into a real
-# transfer. <name> must exactly match an existing account name in your
+# rewritten to "Transfer : <name>" instead of being skipped -- YNAB
+# recognizes that special payee and turns the row into a real transfer. <name> must exactly match an existing account name in your
 # YNAB budget (the checking account the payment came from). Setting it
 # alone does nothing without the flag.
 checking_account = "Postfinance R&M"

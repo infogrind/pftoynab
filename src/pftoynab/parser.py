@@ -47,9 +47,9 @@ FORMULA_TRIGGER_CHARS = ("=", "+", "-", "@")
 _AMOUNT_RE = re.compile(r"[+-]?\d+(\.\d+)?")
 
 # PostFinance's fixed description for a credit card bill payment coming in
-# from the linked checking account. Recognized so it can be rewritten into
-# YNAB's special transfer payee instead of importing as plain income -- see
-# transfer_checking_account below.
+# from the linked checking account. Recognized so it can be skipped (the
+# default) or rewritten into YNAB's special transfer payee instead of
+# importing as plain income -- see transfer_checking_account below.
 TRANSFER_TRIGGER_DESC = "2002 IHRE ZAHLUNG"
 
 
@@ -202,6 +202,7 @@ def _parse_row(
     transfer_checking_account: str | None,
     errors: list[str],
     warnings: list[str],
+    notes: list[str],
 ) -> Transaction | None:
     if len(row) < expected_ncols:
         errors.append(
@@ -242,7 +243,11 @@ def _parse_row(
         return None
 
     raw_desc = row[cols.desc].strip()
-    if transfer_checking_account and raw_desc.casefold() == TRANSFER_TRIGGER_DESC.casefold():
+    is_bill_payment = raw_desc.casefold() == TRANSFER_TRIGGER_DESC.casefold()
+    if is_bill_payment and not transfer_checking_account:
+        notes.append(f"record {record_no}: skipped credit card bill payment {raw_desc!r}")
+        return None
+    if is_bill_payment:
         payee = f"Transfer : {transfer_checking_account}"
         warnings.append(
             f"record {record_no}: rewrote {raw_desc!r} as a transfer to/from "
@@ -305,8 +310,19 @@ def parse_postfinance_csv(
     strip_prefixes: list[str] | None = None,
     include_category_memo: bool = False,
     transfer_checking_account: str | None = None,
+    notes: list[str] | None = None,
 ) -> tuple[list[Transaction], list[str]]:
+    """Parse a PostFinance export into transactions plus non-fatal warnings.
+
+    Credit card bill payment rows are skipped unless transfer_checking_account
+    is given, in which case they're rewritten as YNAB transfers from that
+    account. Informational messages that aren't worth a warning (such as
+    skipped rows) are appended to ``notes`` if provided.
+    """
     strip_prefixes = strip_prefixes or []
+    if notes is None:
+        notes = []
+    notes_before = len(notes)
 
     if "\x00" in text:
         raise PftoynabError(
@@ -367,6 +383,7 @@ def parse_postfinance_csv(
                 transfer_checking_account,
                 errors,
                 warnings,
+                notes,
             )
             if transaction is not None:
                 transactions.append(transaction)
@@ -383,6 +400,11 @@ def parse_postfinance_csv(
         raise PftoynabError("input validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
 
     if not transactions:
+        if len(notes) > notes_before:
+            raise PftoynabError(
+                "no transactions left to import: the input file only contains credit card "
+                "bill payments, which are skipped unless --transfers is given"
+            )
         raise PftoynabError("no transactions found in the input file")
 
     # Stable sort: preserves each day's original relative row order, which

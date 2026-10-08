@@ -293,14 +293,13 @@ def test_credit_card_export_parsed_using_buchungsdatum():
             ),
         ]
     )
-    transactions, warnings = parse_postfinance_csv(text)
+    transactions, _ = parse_postfinance_csv(text, transfer_checking_account="Checking")
 
-    assert warnings == []
     assert len(transactions) == 2
     # Sorted ascending by Buchungsdatum (posting date), not Einkaufsdatum.
     assert [t.txn_date.isoformat() for t in transactions] == ["2026-01-07", "2026-01-15"]
     payment, purchase = transactions
-    assert payment.payee == "2002 IHRE ZAHLUNG"
+    assert payment.payee == "Transfer : Checking"
     assert payment.inflow == Decimal("1360.30")
     assert purchase.payee == "Apple Pay - Coop Zürich"
     assert purchase.outflow == Decimal("9.15")
@@ -335,13 +334,37 @@ def test_credit_card_payment_match_is_case_insensitive():
     assert transactions[0].payee == "Transfer : Checking"
 
 
-def test_credit_card_payment_not_rewritten_without_configured_account():
+def test_credit_card_payment_skipped_without_configured_account():
+    text = build_credit_card_export(
+        [
+            credit_card_row(desc="2002 IHRE ZAHLUNG", debit="", credit="1360.30"),
+            credit_card_row(desc="Apple Pay - Coop Zürich"),
+        ]
+    )
+    notes: list[str] = []
+    transactions, warnings = parse_postfinance_csv(text, notes=notes)
+    assert [t.payee for t in transactions] == ["Apple Pay - Coop Zürich"]
+    assert warnings == []
+    assert notes == ["record 1: skipped credit card bill payment '2002 IHRE ZAHLUNG'"]
+
+
+def test_credit_card_payment_skip_match_is_case_insensitive():
+    text = build_credit_card_export(
+        [
+            credit_card_row(desc="2002 ihre zahlung", debit="", credit="500"),
+            credit_card_row(desc="Apple Pay - Coop Zürich"),
+        ]
+    )
+    transactions, _ = parse_postfinance_csv(text)
+    assert [t.payee for t in transactions] == ["Apple Pay - Coop Zürich"]
+
+
+def test_export_with_only_skipped_bill_payments_reports_why_nothing_is_left():
     text = build_credit_card_export(
         [credit_card_row(desc="2002 IHRE ZAHLUNG", debit="", credit="1360.30")]
     )
-    transactions, warnings = parse_postfinance_csv(text)
-    assert transactions[0].payee == "2002 IHRE ZAHLUNG"
-    assert warnings == []
+    with pytest.raises(PftoynabError, match="only contains credit card bill payments"):
+        parse_postfinance_csv(text)
 
 
 def test_unrelated_description_not_rewritten_as_transfer():

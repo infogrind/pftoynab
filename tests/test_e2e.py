@@ -79,7 +79,9 @@ def test_credit_card_payment_rewritten_as_transfer_with_configured_account(tmp_p
     assert "rewrote '2002 IHRE ZAHLUNG'" in capsys.readouterr().err
 
 
-def test_credit_card_payment_not_rewritten_without_transfers_flag(tmp_path, monkeypatch):
+def test_credit_card_payment_skipped_without_transfers_flag(tmp_path, monkeypatch, capsys):
+    # Even with an account configured, the bill payment row is left out
+    # unless --transfers is given.
     monkeypatch.setattr(cli, "find_config_path", lambda: TESTDATA / "config_with_transfer.toml")
     input_csv = _copy(tmp_path, "postfinance_credit_card_export.csv")
     output_csv = tmp_path / "output.csv"
@@ -89,6 +91,9 @@ def test_credit_card_payment_not_rewritten_without_transfers_flag(tmp_path, monk
     assert exit_code == 0
     golden = (TESTDATA / "postfinance_credit_card_export_ynab_golden.csv").read_bytes()
     assert output_csv.read_bytes() == golden
+    captured = capsys.readouterr()
+    assert "Note: record 4: skipped credit card bill payment '2002 IHRE ZAHLUNG'" in captured.out
+    assert "Warning" not in captured.err
 
 
 def test_transfers_flag_without_configured_account_is_rejected(tmp_path, capsys):
