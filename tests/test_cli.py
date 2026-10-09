@@ -33,6 +33,69 @@ def test_successful_conversion_end_to_end(tmp_path, capsys):
     assert "ready for import into YNAB" in out
 
 
+def test_input_file_deleted_after_successful_conversion(tmp_path, capsys):
+    input_csv = write(tmp_path / "export.csv", build_export([row()]))
+
+    exit_code = cli.main([str(input_csv)])
+
+    assert exit_code == 0
+    assert (tmp_path / "export_ynab.csv").exists()
+    assert not input_csv.exists()
+    assert f"Deleted input file {input_csv}" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("flag", ["--keep-input", "-k"])
+def test_keep_input_flag_preserves_input_file(tmp_path, capsys, flag):
+    input_csv = write(tmp_path / "export.csv", build_export([row()]))
+
+    exit_code = cli.main([str(input_csv), flag])
+
+    assert exit_code == 0
+    assert (tmp_path / "export_ynab.csv").exists()
+    assert input_csv.exists()
+    assert "Deleted input file" not in capsys.readouterr().out
+
+
+def test_input_file_kept_when_conversion_fails(tmp_path):
+    input_csv = write(tmp_path / "export.csv", build_export([row(date="not-a-date")]))
+
+    exit_code = cli.main([str(input_csv)])
+
+    assert exit_code == 1
+    assert input_csv.exists()
+
+
+def test_input_file_kept_when_interactive_memo_is_aborted(tmp_path, monkeypatch):
+    input_csv = write(tmp_path / "export.csv", build_export([row()]))
+
+    def abort(prompt):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("builtins.input", abort)
+
+    exit_code = cli.main([str(input_csv), "-i"])
+
+    assert exit_code == 1
+    assert input_csv.exists()
+
+
+def test_failure_to_delete_input_is_a_warning_not_an_error(tmp_path, monkeypatch, capsys):
+    input_csv = write(tmp_path / "export.csv", build_export([row()]))
+
+    def fail_unlink(self, missing_ok=False):
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+
+    exit_code = cli.main([str(input_csv)])
+
+    assert exit_code == 0
+    assert (tmp_path / "export_ynab.csv").exists()
+    captured = capsys.readouterr()
+    assert "could not delete input file" in captured.err
+    assert "1 warning(s) above" in captured.out
+
+
 def test_interactive_memo_flag_overrides_derived_memo(tmp_path, monkeypatch):
     input_csv = write(
         tmp_path / "export.csv",
@@ -127,6 +190,7 @@ def test_custom_output_path(tmp_path):
 
     assert exit_code == 0
     assert output_csv.exists()
+    assert not input_csv.exists()
 
 
 def test_output_path_same_as_input_rejected(tmp_path, capsys):
@@ -238,6 +302,23 @@ def test_auto_detects_newest_export_in_downloads(tmp_path, monkeypatch, capsys):
     assert f"using the newest export in Downloads: {newer}" in out
     assert (downloads / "export_bewegungen_20260201_ynab.csv").exists()
     assert not (downloads / "export_bewegungen_20260101_ynab.csv").exists()
+    # Only the auto-detected export is deleted; other exports are untouched.
+    assert not newer.exists()
+    assert older.exists()
+
+
+def test_auto_detected_input_kept_with_keep_input_flag(tmp_path, monkeypatch):
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+    export = write(downloads / "export_bewegungen_20260101.csv", build_export([row()]))
+
+    exit_code = cli.main(["--keep-input"])
+
+    assert exit_code == 0
+    assert (downloads / "export_bewegungen_20260101_ynab.csv").exists()
+    assert export.exists()
 
 
 def test_auto_detects_newest_export_across_both_globs(tmp_path, monkeypatch, capsys):

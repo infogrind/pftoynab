@@ -27,6 +27,12 @@ This writes `<input file name>_ynab.csv` next to the input file and prints
 its path. Drag that file into YNAB's "File Based Import" for the matching
 account.
 
+Once the output is written, the input export is **deleted** -- it isn't
+needed after conversion, and this leaves only one file to clean up. Pass
+`-k/--keep-input` to keep it. The input is never deleted when the
+conversion fails or is aborted (e.g. during `-i`), and this applies
+equally to an export picked automatically from `~/Downloads`.
+
 Both PostFinance export types are auto-detected from the file's header
 content, so no flag is needed to say which one you're converting:
 
@@ -54,6 +60,8 @@ Options:
 
 - `-o, --output PATH` — write to a specific output path instead of the default.
 - `--force` — overwrite the output file if it already exists.
+- `-k, --keep-input` — keep the input CSV instead of deleting it after a
+  successful conversion.
 - `-i, --interactive-memo` — after parsing, walk through every transaction in
   date order and type a `Memo` for each (Enter to leave one empty).
 - `-c, --category-memo` — populate `Memo` from the input's `Label`/`Kategorie`

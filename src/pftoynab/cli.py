@@ -95,6 +95,15 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "-k",
+        "--keep-input",
+        action="store_true",
+        help=(
+            "Keep the input CSV after a successful conversion; by default it is deleted "
+            "once the output has been written"
+        ),
+    )
+    parser.add_argument(
         "-t",
         "--transfers",
         action="store_true",
@@ -114,6 +123,7 @@ def _run(
     interactive_memo: bool,
     category_memo: bool,
     transfers: bool,
+    keep_input: bool,
 ) -> int:
     config_path = find_config_path()
     config = load_config(config_path)
@@ -178,6 +188,19 @@ def _run(
     write_ynab_csv(transactions, output_path)
 
     print(f"Wrote {len(transactions)} transaction(s) to {output_path}; ready for import into YNAB.")
+
+    # Only reached once the output is safely written, so a failed or aborted
+    # run never loses the input.
+    if not keep_input:
+        try:
+            input_path.unlink()
+        except OSError as e:
+            warning = f"could not delete input file {input_path}: {e}"
+            warnings.append(warning)
+            print(f"Warning: {warning}", file=sys.stderr)
+        else:
+            print(f"Deleted input file {input_path} (use --keep-input to keep it).")
+
     if warnings:
         print(f"({len(warnings)} warning(s) above -- review before importing.)")
     return 0
@@ -194,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
             args.interactive_memo,
             args.category_memo,
             args.transfers,
+            args.keep_input,
         )
     except PftoynabError as e:
         print(f"Error: {e}", file=sys.stderr)
