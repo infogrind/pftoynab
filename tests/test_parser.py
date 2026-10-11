@@ -200,6 +200,33 @@ def test_label_and_kategorie_combined_into_memo():
     assert transactions[0].memo == "Vacation | Freizeit // Reisen"
 
 
+def test_plus_before_phone_number_is_removed_from_payee():
+    text = build_export(
+        [
+            row(desc="TWINT Geld empfangen von +41791234567", debit="", credit="40"),
+            row(desc="TWINT Geld senden an +41791234567"),
+        ]
+    )
+    transactions, _ = parse_postfinance_csv(text)
+    assert transactions[0].payee == "TWINT Geld empfangen von 41791234567"
+    assert transactions[1].payee == "TWINT Geld senden an 41791234567"
+
+
+def test_plus_not_starting_a_number_is_kept_in_payee():
+    text = build_export([row(desc="Migros + Coop AG"), row(desc="Shop 1+1 GmbH")])
+    transactions, _ = parse_postfinance_csv(text)
+    assert [t.payee for t in transactions] == ["Migros + Coop AG", "Shop 1+1 GmbH"]
+
+
+def test_phone_number_payee_after_prefix_strip_is_not_formula_escaped():
+    text = build_export([row(desc="TWINT Geld senden an +41791234567")])
+    transactions, warnings = parse_postfinance_csv(
+        text, strip_prefixes=["TWINT Geld senden an"]
+    )
+    assert transactions[0].payee == "41791234567"
+    assert not any("formula" in w for w in warnings)
+
+
 def test_strip_prefixes_removes_configured_prefix():
     text = build_export([row(desc="TWINT Kauf/Dienstleistung Coop Zürich")])
     transactions, _ = parse_postfinance_csv(text, strip_prefixes=["TWINT Kauf/Dienstleistung "])

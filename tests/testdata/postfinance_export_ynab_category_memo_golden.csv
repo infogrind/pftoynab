@@ -3,7 +3,7 @@ Date,Payee,Memo,Outflow,Inflow
 2026-01-07,Käserei Beispiel,Einkaufen // Detail-Lebensmittel,11.20,
 2026-01-08,Preis für Bankpaket Smart,Finanzen // Gebühren,5.00,
 2026-01-09,Beispiel Kindertagesstätte,Sonstige Ausgaben,1200.00,
-2026-01-10,TWINT Geld senden an +41000000001,Geschenk | Finanzen // Sonstige Geldtransfers,50.00,
+2026-01-10,TWINT Geld senden an 41000000001,Geschenk | Finanzen // Sonstige Geldtransfers,50.00,
 2026-01-11,"PostFinance, Kreditkarten",Überträge,389.90,
 2026-01-12,"Bargeldbezug vom 12.01.2026, Bahnhof Zürich HB",Finanzen // Bargeldbezug,200.00,
 2026-01-13,Muster Versicherung AG,Finanzen // Versicherungen,245.30,

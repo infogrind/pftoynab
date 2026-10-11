@@ -52,6 +52,14 @@ _AMOUNT_RE = re.compile(r"[+-]?\d+(\.\d+)?")
 # importing as plain income -- see transfer_checking_account below.
 TRANSFER_TRIGGER_DESC = "2002 IHRE ZAHLUNG"
 
+# A "+" starting a word and followed by a digit, as in the international
+# phone numbers PostFinance puts in TWINT P2P descriptions ("TWINT Geld
+# empfangen von +41791234567"). YNAB was observed to drop the whole
+# "+41..." part from such payees on import, so every TWINT P2P transfer
+# collapsed into one payee (and one auto-created renaming rule). Dropping
+# the "+" keeps the number, and with it a distinct payee per counterparty.
+_PLUS_BEFORE_DIGIT_RE = re.compile(r"(?<!\S)\+(?=\d)")
+
 
 @dataclass
 class Transaction:
@@ -256,6 +264,7 @@ def _parse_row(
         )
     else:
         desc = _strip_configured_prefix(raw_desc, strip_prefixes)
+        desc = _PLUS_BEFORE_DIGIT_RE.sub("", desc)
         payee = sanitize_field(desc, MAX_PAYEE_LEN, "payee", record_no, warnings)
         if not payee:
             errors.append(f"record {record_no}: description/payee is empty")
