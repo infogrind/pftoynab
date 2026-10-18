@@ -1,6 +1,6 @@
 import pytest
 
-from pftoynab.config import Config, find_config_path, load_config
+from pftoynab.config import Config, find_config_path, load_config, save_twint_contact
 from pftoynab.errors import PftoynabError
 
 
@@ -158,3 +158,65 @@ def test_find_config_path_ignores_relative_xdg_config_home(monkeypatch, tmp_path
     monkeypatch.setenv("XDG_CONFIG_HOME", "relative/path")
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     assert find_config_path() == tmp_path / ".config" / "pftoynab" / "config.toml"
+
+
+def test_loads_twint_contacts_with_normalized_numbers(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '[twint.contacts]\n"+41791234567" = "Kristina Schuricht"\n"41 79 000 00 00" = " Max "\n',
+        encoding="utf-8",
+    )
+    config = load_config(config_file)
+    assert config.twint_contacts == {"+41791234567": "Kristina Schuricht", "+41790000000": "Max"}
+
+
+def test_missing_twint_section_returns_no_contacts(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("# no [twint] section here\n", encoding="utf-8")
+    assert load_config(config_file).twint_contacts == {}
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ('twint = "x"\n', r"\[twint\] must be a table"),
+        ('[twint]\ncontacts = "x"\n', r"\[twint.contacts\] must be a table"),
+        ('[twint.contacts]\n"+41791234567" = 5\n', r"\[twint.contacts\] must be a table"),
+        ('[twint.contacts]\nanna = "Anna"\n', "is not a phone number"),
+        ('[twint.contacts]\n"+41791234567" = " "\n', "is empty"),
+    ],
+)
+def test_invalid_twint_contacts_raise(tmp_path, content, message):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(content, encoding="utf-8")
+    with pytest.raises(PftoynabError, match=message):
+        load_config(config_file)
+
+
+def test_save_twint_contact_creates_missing_config(tmp_path):
+    config_file = tmp_path / "pftoynab" / "config.toml"
+    save_twint_contact(config_file, "+41791234567", "Kristina Schuricht")
+    assert load_config(config_file).twint_contacts == {"+41791234567": "Kristina Schuricht"}
+
+
+def test_save_twint_contact_preserves_existing_content(tmp_path):
+    config_file = tmp_path / "config.toml"
+    original = (
+        "# my settings\n"
+        '[payee]\nstrip_prefixes = ["Gutschrift von "]  # trailing comment\n'
+        "\n[twint.contacts]\n"
+        '"+41790000000" = "Max"\n'
+    )
+    config_file.write_text(original, encoding="utf-8")
+
+    save_twint_contact(config_file, "+41791234567", "Kristina Schuricht")
+
+    assert config_file.read_text(encoding="utf-8") == original + '"+41791234567" = "Kristina Schuricht"\n'
+    assert not (tmp_path / "config.toml.tmp").exists()
+
+
+def test_save_twint_contact_into_invalid_toml_raises(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("not = [valid\n", encoding="utf-8")
+    with pytest.raises(PftoynabError, match="could not read config file"):
+        save_twint_contact(config_file, "+41791234567", "Kristina Schuricht")

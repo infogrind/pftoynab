@@ -13,7 +13,11 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import tomlkit
+from tomlkit.exceptions import TOMLKitError
+
 from .errors import PftoynabError
+from .parser import normalize_phone_number
 
 APP_NAME = "pftoynab"
 CONFIG_FILENAME = "config.toml"
@@ -30,6 +34,8 @@ class Config:
     input_glob: str = DEFAULT_INPUT_GLOB
     credit_card_glob: str = DEFAULT_CREDIT_CARD_GLOB
     transfer_checking_account: str | None = None
+    # Normalized phone number ("+41791234567") -> name, for TWINT P2P payees.
+    twint_contacts: dict[str, str] = field(default_factory=dict)
 
 
 def find_config_path() -> Path:
@@ -86,10 +92,62 @@ def load_config(path: Path) -> Config:
     if transfer_checking_account is not None and not isinstance(transfer_checking_account, str):
         raise PftoynabError(f"config file {path}: transfers.checking_account must be a string")
 
+    twint_section = data.get("twint", {})
+    if not isinstance(twint_section, dict):
+        raise PftoynabError(f"config file {path}: [twint] must be a table")
+
+    contacts_section = twint_section.get("contacts", {})
+    if not isinstance(contacts_section, dict) or not all(
+        isinstance(v, str) for v in contacts_section.values()
+    ):
+        raise PftoynabError(
+            f"config file {path}: [twint.contacts] must be a table of \"<phone number>\" = \"<name>\""
+        )
+    twint_contacts: dict[str, str] = {}
+    for number, name in contacts_section.items():
+        if not any(c.isdigit() for c in number):
+            raise PftoynabError(f"config file {path}: twint.contacts key {number!r} is not a phone number")
+        if not name.strip():
+            raise PftoynabError(f"config file {path}: twint.contacts name for {number!r} is empty")
+        twint_contacts[normalize_phone_number(number)] = name.strip()
+
     return Config(
         strip_prefixes=strip_prefixes,
         input_directory=input_directory,
         input_glob=input_glob,
         credit_card_glob=credit_card_glob,
         transfer_checking_account=transfer_checking_account,
+        twint_contacts=twint_contacts,
     )
+
+
+def save_twint_contact(path: Path, number: str, name: str) -> None:
+    """Add (or overwrite) one entry in the config's [twint.contacts] table.
+
+    Edits the file with tomlkit so the user's existing formatting and
+    comments survive, creating the file (and its directory) if needed. The
+    new content is written to a temporary file first and then moved into
+    place, so an interrupted write can't leave a truncated config behind.
+    """
+    try:
+        doc = tomlkit.parse(path.read_text(encoding="utf-8")) if path.exists() else tomlkit.document()
+    except (OSError, UnicodeDecodeError, TOMLKitError) as e:
+        raise PftoynabError(f"could not read config file {path} to save a TWINT contact: {e}") from e
+
+    twint = doc.get("twint")
+    if twint is None:
+        twint = tomlkit.table(is_super_table=True)
+        doc["twint"] = twint
+    contacts = twint.get("contacts")
+    if contacts is None:
+        contacts = tomlkit.table()
+        twint["contacts"] = contacts
+    contacts[number] = name
+
+    tmp_path = path.with_name(path.name + ".tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
+        tmp_path.replace(path)
+    except OSError as e:
+        raise PftoynabError(f"could not save TWINT contact to config file {path}: {e}") from e

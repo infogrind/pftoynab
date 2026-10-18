@@ -50,6 +50,18 @@ content, so no flag is needed to say which one you're converting:
   -- see Configuration) to import it as a transfer instead, rewritten to
   YNAB's special transfer payee.
 
+TWINT person-to-person transfers (`"TWINT Geld senden an +41..."` /
+`"TWINT Geld empfangen von +41..."`) only name the counterparty by phone
+number, and YNAB's import strips numbers from payees -- so all of them
+would collapse into a single payee. Instead, such transfers get the payee
+`Twint - <name>` (the same for incoming and outgoing money), with the
+name looked up in the `[twint.contacts]` config table (see
+Configuration). For each number not yet in it, you're asked for a name
+(listing that number's transactions, so you can look it up in online
+banking); the name is saved to the config right away and used in the
+output. Press Enter to skip a number, which leaves its payee as is and
+prints a warning.
+
 If the path is omitted, the newest file matching either configured glob
 (`export_bewegungen_*.csv` or `export_kreditkartenuebersicht_*.csv`) in
 `~/Downloads` is used automatically (the directory and both globs are
@@ -119,6 +131,14 @@ credit_card_glob = "export_kreditkartenuebersicht_*.csv"
 # YNAB budget (the checking account the payment came from). Setting it
 # alone does nothing without the flag.
 checking_account = "Postfinance R&M"
+
+[twint.contacts]
+# Names for TWINT person-to-person transfers, by phone number: payments to
+# or from these numbers get the payee "Twint - <name>". Filled in
+# automatically when you name an unknown number during a conversion, but
+# can be edited by hand too (spaces in the number and the leading "+" are
+# optional).
+"+41791234567" = "Kristina Schuricht"
 ```
 
 When using `--transfers`, make sure the matching entry

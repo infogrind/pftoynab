@@ -4,10 +4,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from .config import Config, find_config_path, load_config
+from .config import Config, find_config_path, load_config, save_twint_contact
 from .errors import PftoynabError
-from .interactive import run_interactive_memo
-from .parser import parse_postfinance_csv
+from .interactive import ask_twint_contact_names, run_interactive_memo
+from .parser import apply_twint_contacts, parse_postfinance_csv
 from .writer import write_ynab_csv
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB; a personal transaction export is orders of magnitude smaller.
@@ -178,6 +178,27 @@ def _run(
         raise PftoynabError(
             f"output file already exists: {output_path} (use --force to overwrite)"
         )
+
+    contacts = dict(config.twint_contacts)
+    new_contacts = ask_twint_contact_names(
+        transactions,
+        contacts,
+        lambda number, name: save_twint_contact(config_path, number, name),
+    )
+    if new_contacts:
+        print(f"Saved {len(new_contacts)} TWINT contact(s) to {config_path}.")
+    contacts.update(new_contacts)
+    twint_warnings = apply_twint_contacts(transactions, contacts)
+    skipped_numbers = sorted(
+        {t.twint_number for t in transactions if t.twint_number and t.twint_number not in contacts}
+    )
+    twint_warnings += [
+        f"no name given for TWINT number {number}; YNAB will drop the number from its payee"
+        for number in skipped_numbers
+    ]
+    warnings += twint_warnings
+    for w in twint_warnings:
+        print(f"Warning: {w}", file=sys.stderr)
 
     if interactive_memo:
         interactive_warnings = run_interactive_memo(transactions)

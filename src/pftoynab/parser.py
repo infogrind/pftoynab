@@ -60,6 +60,16 @@ TRANSFER_TRIGGER_DESC = "2002 IHRE ZAHLUNG"
 # the "+" keeps the number, and with it a distinct payee per counterparty.
 _PLUS_BEFORE_DIGIT_RE = re.compile(r"(?<!\S)\+(?=\d)")
 
+TWINT_PAYEE_PREFIX = "Twint - "
+
+# TWINT person-to-person transfers, which PostFinance describes only by the
+# counterparty's phone number. YNAB's import cleanup strips numbers from
+# payees, so these are tagged with the number and later given a name from
+# the [twint.contacts] config table (see apply_twint_contacts).
+_TWINT_P2P_RE = re.compile(
+    r"TWINT Geld (?:senden an|empfangen von) (\+?\d[\d ]*\d)", re.IGNORECASE
+)
+
 
 @dataclass
 class Transaction:
@@ -68,6 +78,35 @@ class Transaction:
     memo: str
     outflow: Decimal | None
     inflow: Decimal | None
+    # Normalized phone number ("+41791234567") of a TWINT P2P transfer's
+    # counterparty, or None for any other transaction.
+    twint_number: str | None = None
+
+
+def normalize_phone_number(number: str) -> str:
+    """Normalize a phone number to "+" plus its digits, e.g. "+41791234567".
+
+    Used both for numbers parsed from PostFinance descriptions and for the
+    keys of the [twint.contacts] config table, so either can be written
+    with or without the "+" and with spaces.
+    """
+    return "+" + "".join(c for c in number if c.isdigit())
+
+
+def apply_twint_contacts(transactions: list[Transaction], contacts: dict[str, str]) -> list[str]:
+    """Rename TWINT P2P transfers to known numbers to "Twint - <name>".
+
+    Incoming and outgoing transfers get the same payee, so each person is a
+    single payee in YNAB. ``contacts`` maps normalized phone numbers to
+    names. Transfers whose number isn't in it keep their payee as parsed.
+    Returns warnings.
+    """
+    warnings: list[str] = []
+    for i, t in enumerate(transactions, start=1):
+        if t.twint_number is not None and t.twint_number in contacts:
+            payee = f"{TWINT_PAYEE_PREFIX}{contacts[t.twint_number]}"
+            t.payee = sanitize_field(payee, MAX_PAYEE_LEN, "payee", i, warnings)
+    return warnings
 
 
 def _normalize(cell: str) -> str:
@@ -283,7 +322,10 @@ def _parse_row(
     outflow = -debit if debit is not None else None
     inflow = credit if credit is not None else None
 
-    return Transaction(txn_date, payee, memo, outflow, inflow)
+    twint_match = None if is_bill_payment else _TWINT_P2P_RE.fullmatch(raw_desc)
+    twint_number = normalize_phone_number(twint_match.group(1)) if twint_match else None
+
+    return Transaction(txn_date, payee, memo, outflow, inflow, twint_number)
 
 
 def _warn_about_ambiguous_dedup_groups(transactions: list[Transaction], warnings: list[str]) -> None:

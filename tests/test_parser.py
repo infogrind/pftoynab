@@ -4,7 +4,11 @@ import pytest
 from conftest import build_credit_card_export, build_export, credit_card_row, row
 
 from pftoynab.errors import PftoynabError
-from pftoynab.parser import parse_postfinance_csv
+from pftoynab.parser import (
+    apply_twint_contacts,
+    normalize_phone_number,
+    parse_postfinance_csv,
+)
 
 
 def test_parses_valid_export():
@@ -411,3 +415,44 @@ def test_dedup_warning_groups_by_signed_amount_not_magnitude():
     )
     _, warnings = parse_postfinance_csv(text)
     assert warnings == []
+
+
+def test_twint_p2p_transfers_are_tagged_with_number():
+    text = build_export(
+        [
+            row(date="02.01.2026", desc="TWINT Geld empfangen von +41791234567", debit="", credit="40"),
+            row(date="03.01.2026", desc="TWINT Geld senden an +41 79 123 45 67"),
+            row(date="04.01.2026", desc="TWINT Kauf/Dienstleistung Coop 1234567"),
+        ]
+    )
+    transactions, _ = parse_postfinance_csv(text)
+    assert [t.twint_number for t in transactions] == ["+41791234567", "+41791234567", None]
+
+
+def test_twint_p2p_number_survives_prefix_stripping():
+    text = build_export([row(desc="TWINT Geld senden an +41791234567")])
+    transactions, _ = parse_postfinance_csv(text, strip_prefixes=["TWINT Geld senden an"])
+    assert transactions[0].twint_number == "+41791234567"
+
+
+def test_apply_twint_contacts_renames_known_numbers_only():
+    text = build_export(
+        [
+            row(date="02.01.2026", desc="TWINT Geld empfangen von +41791234567", debit="", credit="40"),
+            row(date="03.01.2026", desc="TWINT Geld senden an +41791234567"),
+            row(date="04.01.2026", desc="TWINT Geld senden an +41790000000"),
+        ]
+    )
+    transactions, _ = parse_postfinance_csv(text)
+    warnings = apply_twint_contacts(transactions, {"+41791234567": "Kristina Schuricht"})
+    assert warnings == []
+    assert [t.payee for t in transactions] == [
+        "Twint - Kristina Schuricht",
+        "Twint - Kristina Schuricht",
+        "TWINT Geld senden an 41790000000",
+    ]
+
+
+@pytest.mark.parametrize("number", ["+41791234567", "41791234567", "+41 79 123 45 67"])
+def test_normalize_phone_number(number):
+    assert normalize_phone_number(number) == "+41791234567"

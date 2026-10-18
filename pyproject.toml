@@ -8,7 +8,9 @@ authors = [
     { name = "Marius Kleiner", email = "kleiner@gmail.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "tomlkit>=0.15.2",
+]
 
 [project.scripts]
 pftoynab = "pftoynab:main"

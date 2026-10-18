@@ -55,6 +55,58 @@ def test_category_memo_flag_matches_golden_output(tmp_path):
     assert output_csv.read_bytes() == golden
 
 
+def test_unknown_twint_number_is_asked_for_and_saved_to_config(tmp_path, monkeypatch, capsys):
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('[payee]\nstrip_prefixes = ["Gutschrift von "]  # keep me\n', encoding="utf-8")
+    monkeypatch.setattr(cli, "find_config_path", lambda: config_path)
+    monkeypatch.setattr("builtins.input", lambda prompt: "Kristina Schuricht")
+    input_csv = _copy(tmp_path, "postfinance_export.csv")
+    output_csv = tmp_path / "output.csv"
+
+    exit_code = cli.main([str(input_csv), "-o", str(output_csv)])
+
+    assert exit_code == 0
+    assert "2026-01-10,Twint - Kristina Schuricht,,50.00," in output_csv.read_text(encoding="utf-8")
+    assert config_path.read_text(encoding="utf-8") == (
+        '[payee]\nstrip_prefixes = ["Gutschrift von "]  # keep me\n'
+        '\n[twint.contacts]\n"+41000000001" = "Kristina Schuricht"\n'
+    )
+    assert "Saved 1 TWINT contact(s)" in capsys.readouterr().out
+
+
+def test_skipped_twint_number_keeps_payee_and_warns(tmp_path, monkeypatch, capsys):
+    config_path = tmp_path / "config.toml"
+    monkeypatch.setattr(cli, "find_config_path", lambda: config_path)
+    monkeypatch.setattr("builtins.input", lambda prompt: "")
+    input_csv = _copy(tmp_path, "postfinance_export.csv")
+    output_csv = tmp_path / "output.csv"
+
+    exit_code = cli.main([str(input_csv), "-o", str(output_csv)])
+
+    assert exit_code == 0
+    assert "2026-01-10,TWINT Geld senden an 41000000001,,50.00," in output_csv.read_text(encoding="utf-8")
+    assert not config_path.exists()
+    assert "no name given for TWINT number +41000000001" in capsys.readouterr().err
+
+
+def test_aborted_twint_contact_entry_keeps_input_and_writes_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "find_config_path", lambda: tmp_path / "config.toml")
+
+    def raise_eof(prompt):
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", raise_eof)
+    input_csv = _copy(tmp_path, "postfinance_export.csv")
+    output_csv = tmp_path / "output.csv"
+
+    exit_code = cli.main([str(input_csv), "-o", str(output_csv)])
+
+    assert exit_code == 1
+    assert "TWINT contact entry aborted" in capsys.readouterr().err
+    assert input_csv.exists()
+    assert not output_csv.exists()
+
+
 def test_credit_card_export_matches_golden_output(tmp_path):
     input_csv = _copy(tmp_path, "postfinance_credit_card_export.csv")
     output_csv = tmp_path / "output.csv"
