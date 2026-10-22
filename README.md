@@ -50,17 +50,19 @@ content, so no flag is needed to say which one you're converting:
   -- see Configuration) to import it as a transfer instead, rewritten to
   YNAB's special transfer payee.
 
-TWINT person-to-person transfers (`"TWINT Geld senden an +41..."` /
-`"TWINT Geld empfangen von +41..."`) only name the counterparty by phone
-number, and YNAB's import strips numbers from payees -- so all of them
-would collapse into a single payee. Instead, such transfers get the payee
-`Twint - <name>` (the same for incoming and outgoing money), with the
-name looked up in the `[twint.contacts]` config table (see
-Configuration). For each number not yet in it, you're asked for a name
+TWINT person-to-person transfers name the counterparty by phone number,
+and YNAB's import strips numbers from payees -- so all of them would
+collapse into a single payee. Instead, such transfers get the payee
+`Twint - <name>` (the same for incoming and outgoing money). The name
+comes from the `[twint.contacts]` config table (see Configuration) or,
+failing that, from the export itself: PostFinance's newer format
+(`"TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41... MUSTER, ERIKA ..."`) includes it, the older one (`"TWINT Geld senden an +41..."`)
+doesn't. For each number with no name from either, you're asked for one
 (listing that number's transactions, so you can look it up in online
 banking); the name is saved to the config right away and used in the
 output. Press Enter to skip a number, which leaves its payee as is and
-prints a warning.
+prints a warning. A message attached to the transfer (the newer format's
+`"MITTEILUNGEN: ..."` part) goes into `Memo`.
 
 If the path is omitted, the newest file matching either configured glob
 (`export_bewegungen_*.csv` or `export_kreditkartenuebersicht_*.csv`) in
@@ -77,8 +79,9 @@ Options:
 - `-i, --interactive-memo` — after parsing, walk through every transaction in
   date order and type a `Memo` for each (Enter to leave one empty).
 - `-c, --category-memo` — populate `Memo` from the input's `Label`/`Kategorie`
-  columns instead of leaving it empty (the default -- PostFinance's
-  auto-assigned `Kategorie` is rarely useful as-is). `-i` always starts each
+  columns (after a TWINT message, if any) instead of leaving it empty (the
+  default -- PostFinance's auto-assigned `Kategorie` is rarely useful
+  as-is). `-i` always starts each
   prompt blank regardless of this flag, since it's meant for typing a fresh
   Memo by hand.
 - `-t, --transfers` — credit card exports only: import the bill payment row
@@ -89,9 +92,10 @@ Options:
 The script validates the input thoroughly and refuses to write output if
 anything looks wrong (unparsable dates/amounts, ambiguous or missing
 amounts, an unrecognized file structure, etc.) rather than guessing.
-Non-fatal issues (e.g. a field that had to be truncated, or text that
-looked like a spreadsheet formula and was neutralized) are reported as
-warnings but don't block the conversion.
+Non-fatal issues (e.g. a field that had to be truncated, text that
+looked like a spreadsheet formula and was neutralized, or a row with a
+blank description, imported with the payee `(no description)`) are
+reported as warnings but don't block the conversion.
 
 Deduplication of transactions already present in your YNAB budget is left
 entirely to YNAB itself — see "Notes on YNAB import" below.
@@ -113,6 +117,14 @@ strip_prefixes = [
     "Lastschrift an ",
     "TWINT Kauf/Dienstleistung ",
     "CH-DD ",
+]
+# Regular expressions removed from the payee text wherever they match
+# (case-insensitively), applied in order after strip_prefixes. Anchor with
+# ^ or $ to only strip a prefix or suffix. Use single-quoted TOML strings
+# so backslashes don't need escaping.
+strip_patterns = [
+    '^TWINT KAUF/DIENSTLEISTUNG VOM \d{2}\.\d{2}\.\d{4} ',
+    ' \(CH\)$',
 ]
 
 [input]
@@ -162,7 +174,7 @@ uv run ruff check .
   are non-negative amounts, only one populated per row). This is the format
   this tool produces.
 - YNAB categories cannot be set via CSV import. `Memo` is left empty by
-  default; pass `-c`/`--category-memo` to carry the PostFinance-assigned
+  default (except for TWINT transfer messages); pass `-c`/`--category-memo` to carry the PostFinance-assigned
   category (and any user-set label) into it instead, for reference when
   categorizing in YNAB -- or use `-i`/`--interactive-memo` to type your own.
 - YNAB automatically deduplicates imported transactions per account using

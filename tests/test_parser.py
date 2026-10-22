@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 import pytest
@@ -118,10 +119,12 @@ def test_row_too_short_raises():
         parse_postfinance_csv(text)
 
 
-def test_empty_description_raises():
-    text = build_export([row(desc="")])
-    with pytest.raises(PftoynabError, match="description/payee is empty"):
-        parse_postfinance_csv(text)
+@pytest.mark.parametrize("desc", ["", " "])
+def test_blank_description_gets_placeholder_payee_and_warning(desc):
+    text = build_export([row(desc=desc)])
+    transactions, warnings = parse_postfinance_csv(text)
+    assert transactions[0].payee == "(no description)"
+    assert warnings == ["record 1: description is blank; imported with payee '(no description)'"]
 
 
 def test_multiple_errors_collected_together():
@@ -263,10 +266,40 @@ def test_strip_prefixes_empty_string_entry_ignored():
     assert transactions[0].payee == "Normal payee"
 
 
-def test_strip_prefixes_stripping_to_empty_is_a_validation_error():
+def test_stripping_to_empty_keeps_description_unstripped_with_warning():
     text = build_export([row(desc="CH-DD")])
-    with pytest.raises(PftoynabError, match="description/payee is empty"):
-        parse_postfinance_csv(text, strip_prefixes=["CH-DD"])
+    transactions, warnings = parse_postfinance_csv(text, strip_prefixes=["CH-DD"])
+    assert transactions[0].payee == "CH-DD"
+    assert "removed the whole description 'CH-DD'" in warnings[0]
+
+
+@pytest.mark.parametrize(
+    ("desc", "expected"),
+    [
+        ("TWINT KAUF/DIENSTLEISTUNG VOM 21.10.2026 EXIL GMBH ZÜRICH (CH)", "EXIL GMBH ZÜRICH"),
+        ("twint kauf/dienstleistung vom 21.10.2026 Exil GmbH Zürich (CH)", "Exil GmbH Zürich"),
+        ("TWINT KAUF/DIENSTLEISTUNG VOM 11.10.2026 ZALANDO BERLIN DEUTSCHLAND", "ZALANDO BERLIN DEUTSCHLAND"),
+        ("Coop Zürich", "Coop Zürich"),
+    ],
+)
+def test_strip_patterns_remove_every_match_case_insensitively(desc, expected):
+    patterns = [
+        re.compile(r"^TWINT KAUF/DIENSTLEISTUNG VOM \d{2}\.\d{2}\.\d{4} ", re.IGNORECASE),
+        re.compile(r" \(CH\)$", re.IGNORECASE),
+    ]
+    text = build_export([row(desc=desc)])
+    transactions, _ = parse_postfinance_csv(text, strip_patterns=patterns)
+    assert transactions[0].payee == expected
+
+
+def test_strip_patterns_apply_after_strip_prefixes():
+    text = build_export([row(desc="Lastschrift an ACME AG REFERENZ: 123")])
+    transactions, _ = parse_postfinance_csv(
+        text,
+        strip_prefixes=["Lastschrift an "],
+        strip_patterns=[re.compile(r" REFERENZ:.*$", re.IGNORECASE)],
+    )
+    assert transactions[0].payee == "ACME AG"
 
 
 def test_extra_trailing_columns_tolerated():
@@ -456,3 +489,84 @@ def test_apply_twint_contacts_renames_known_numbers_only():
 @pytest.mark.parametrize("number", ["+41791234567", "41791234567", "+41 79 123 45 67"])
 def test_normalize_phone_number(number):
     assert normalize_phone_number(number) == "+41791234567"
+
+
+@pytest.mark.parametrize(
+    ("desc", "number", "name"),
+    [
+        (
+            "TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41797692310 BASTER, MAURO MITTEILUNGEN: ZMITTAG",
+            "+41797692310",
+            "Mauro Baster",
+        ),
+        (
+            "TWINT GELD EMPFANGEN VOM 16.10.2026 VON TELEFON-NR. +41766803659 LA VALLE, LUCA MITTEILUNGEN: EMOJI",
+            "+41766803659",
+            "Luca La Valle",
+        ),
+        (
+            "TWINT GELD EMPFANGEN VOM 10.10.2026 VON TELEFON-NR. +41798170063 GRÜNEWALD, TOBIAS",
+            "+41798170063",
+            "Tobias Grünewald",
+        ),
+        ("TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41797692310", "+41797692310", None),
+        ("TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41797692310 MITTEILUNGEN: HI", "+41797692310", None),
+        ("TWINT Geld senden an +41797692310", "+41797692310", None),
+    ],
+)
+def test_dated_twint_p2p_format_yields_number_and_name(desc, number, name):
+    text = build_export([row(desc=desc)])
+    transactions, _ = parse_postfinance_csv(text)
+    assert (transactions[0].twint_number, transactions[0].twint_name) == (number, name)
+
+
+def test_apply_twint_contacts_prefers_config_name_over_export_name():
+    text = build_export(
+        [
+            row(
+                date="02.01.2026",
+                desc="TWINT GELD SENDEN VOM 02.01.2026 AN TELEFON-NR. +41791234567 MUSTER, ERIKA",
+            ),
+            row(
+                date="03.01.2026",
+                desc="TWINT GELD SENDEN VOM 03.01.2026 AN TELEFON-NR. +41790000000 BASTER, MAURO",
+            ),
+        ]
+    )
+    transactions, _ = parse_postfinance_csv(text)
+    apply_twint_contacts(transactions, {"+41791234567": "Erika (Nachbarin)"})
+    assert [t.payee for t in transactions] == ["Twint - Erika (Nachbarin)", "Twint - Mauro Baster"]
+
+
+@pytest.mark.parametrize(
+    ("desc", "memo"),
+    [
+        (
+            "TWINT GELD EMPFANGEN VOM 17.10.2026 VON TELEFON-NR. +41764034092 SCHURICHT, KRISTINA MITTEILUNGEN: SKIKURS 2027",
+            "SKIKURS 2027",
+        ),
+        ("TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41797692310 MITTEILUNGEN: ZMITTAG", "ZMITTAG"),
+        ("TWINT GELD EMPFANGEN VOM 10.10.2026 VON TELEFON-NR. +41798170063 GRÜNEWALD, TOBIAS", ""),
+        ("TWINT Geld senden an +41797692310", ""),
+        ("GUTSCHRIFT AUFTRAGGEBER: ACME AG MITTEILUNGEN: RECHNUNG 42", ""),
+    ],
+)
+def test_twint_p2p_message_goes_into_memo(desc, memo):
+    text = build_export([row(desc=desc)])
+    transactions, _ = parse_postfinance_csv(text)
+    assert transactions[0].memo == memo
+
+
+def test_twint_p2p_message_comes_before_category_memo():
+    desc = "TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41797692310 BASTER, MAURO MITTEILUNGEN: ZMITTAG"
+    text = build_export([row(desc=desc, label="Essen", kategorie="Finanzen")])
+    transactions, _ = parse_postfinance_csv(text, include_category_memo=True)
+    assert transactions[0].memo == "ZMITTAG | Essen | Finanzen"
+
+
+def test_formula_like_twint_message_is_neutralized_in_memo():
+    desc = "TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41797692310 BASTER, MAURO MITTEILUNGEN: =1+1"
+    text = build_export([row(desc=desc)])
+    transactions, warnings = parse_postfinance_csv(text)
+    assert transactions[0].memo == "'=1+1"
+    assert any("memo started with a formula-like character" in w for w in warnings)

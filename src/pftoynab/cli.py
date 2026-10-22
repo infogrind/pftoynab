@@ -7,7 +7,11 @@ from pathlib import Path
 from .config import Config, find_config_path, load_config, save_twint_contact
 from .errors import PftoynabError
 from .interactive import ask_twint_contact_names, run_interactive_memo
-from .parser import apply_twint_contacts, parse_postfinance_csv
+from .parser import (
+    apply_twint_contacts,
+    needs_twint_contact_name,
+    parse_postfinance_csv,
+)
 from .writer import write_ynab_csv
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB; a personal transaction export is orders of magnitude smaller.
@@ -156,6 +160,7 @@ def _run(
     transactions, warnings = parse_postfinance_csv(
         text,
         strip_prefixes=config.strip_prefixes,
+        strip_patterns=config.strip_patterns,
         include_category_memo=category_memo,
         transfer_checking_account=config.transfer_checking_account if transfers else None,
         notes=notes,
@@ -190,7 +195,7 @@ def _run(
     contacts.update(new_contacts)
     twint_warnings = apply_twint_contacts(transactions, contacts)
     skipped_numbers = sorted(
-        {t.twint_number for t in transactions if t.twint_number and t.twint_number not in contacts}
+        {t.twint_number for t in transactions if t.twint_number and needs_twint_contact_name(t, contacts)}
     )
     twint_warnings += [
         f"no name given for TWINT number {number}; YNAB will drop the number from its payee"

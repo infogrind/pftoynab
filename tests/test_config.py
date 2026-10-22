@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from pftoynab.config import Config, find_config_path, load_config, save_twint_contact
@@ -220,3 +222,30 @@ def test_save_twint_contact_into_invalid_toml_raises(tmp_path):
     config_file.write_text("not = [valid\n", encoding="utf-8")
     with pytest.raises(PftoynabError, match="could not read config file"):
         save_twint_contact(config_file, "+41791234567", "Kristina Schuricht")
+
+
+def test_loads_strip_patterns_compiled_case_insensitively(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        "[payee]\nstrip_patterns = ['^TWINT KAUF/DIENSTLEISTUNG VOM \\d{2}\\.\\d{2}\\.\\d{4} ']\n",
+        encoding="utf-8",
+    )
+    config = load_config(config_file)
+    assert config.strip_patterns == [
+        re.compile(r"^TWINT KAUF/DIENSTLEISTUNG VOM \d{2}\.\d{2}\.\d{4} ", re.IGNORECASE)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ('[payee]\nstrip_patterns = "x"\n', "must be a list of non-empty strings"),
+        ('[payee]\nstrip_patterns = [""]\n', "must be a list of non-empty strings"),
+        ("[payee]\nstrip_patterns = ['(unclosed']\n", "is not a valid regex"),
+    ],
+)
+def test_invalid_strip_patterns_raise(tmp_path, content, message):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(content, encoding="utf-8")
+    with pytest.raises(PftoynabError, match=message):
+        load_config(config_file)

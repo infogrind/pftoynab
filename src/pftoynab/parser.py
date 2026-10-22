@@ -62,13 +62,27 @@ _PLUS_BEFORE_DIGIT_RE = re.compile(r"(?<!\S)\+(?=\d)")
 
 TWINT_PAYEE_PREFIX = "Twint - "
 
-# TWINT person-to-person transfers, which PostFinance describes only by the
-# counterparty's phone number. YNAB's import cleanup strips numbers from
-# payees, so these are tagged with the number and later given a name from
-# the [twint.contacts] config table (see apply_twint_contacts).
+# TWINT person-to-person transfers. YNAB's import cleanup strips numbers
+# from payees, so these are tagged with the counterparty's phone number and
+# later renamed to "Twint - <name>" (see apply_twint_contacts). PostFinance
+# has used two formats: the older one names the counterparty only by number
+# ("TWINT Geld senden an +41791234567"), the newer one (since October 2026)
+# adds the transfer date, the counterparty's name as "LAST, FIRST", and an
+# optional message ("TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR.
+# +41791234567 MUSTER, ERIKA MITTEILUNGEN: ZMITTAG"). The message goes into
+# the Memo.
 _TWINT_P2P_RE = re.compile(
-    r"TWINT Geld (?:senden an|empfangen von) (\+?\d[\d ]*\d)", re.IGNORECASE
+    r"TWINT Geld (?:senden an|empfangen von) (?P<number>\+?\d[\d ]*\d)", re.IGNORECASE
 )
+_TWINT_P2P_DATED_RE = re.compile(
+    r"TWINT GELD (?:SENDEN|EMPFANGEN) VOM \d{2}\.\d{2}\.\d{4} (?:AN|VON) "
+    r"TELEFON-NR\. (?P<number>\+?\d+)(?: (?!MITTEILUNGEN: )(?P<name>.+?))?(?: MITTEILUNGEN: (?P<message>.*))?",
+    re.IGNORECASE,
+)
+
+# Payee for a row whose description is blank, which PostFinance
+# occasionally exports for an otherwise normal transaction.
+BLANK_DESC_PAYEE = "(no description)"
 
 
 @dataclass
@@ -81,6 +95,9 @@ class Transaction:
     # Normalized phone number ("+41791234567") of a TWINT P2P transfer's
     # counterparty, or None for any other transaction.
     twint_number: str | None = None
+    # The counterparty's name as given in the description (newer TWINT P2P
+    # format only), e.g. "Erika Muster"; a [twint.contacts] entry overrides it.
+    twint_name: str | None = None
 
 
 def normalize_phone_number(number: str) -> str:
@@ -93,19 +110,26 @@ def normalize_phone_number(number: str) -> str:
     return "+" + "".join(c for c in number if c.isdigit())
 
 
-def apply_twint_contacts(transactions: list[Transaction], contacts: dict[str, str]) -> list[str]:
-    """Rename TWINT P2P transfers to known numbers to "Twint - <name>".
+def needs_twint_contact_name(t: Transaction, contacts: dict[str, str]) -> bool:
+    """Whether t is a TWINT P2P transfer with no name from contacts or the export."""
+    return t.twint_number is not None and t.twint_number not in contacts and not t.twint_name
 
-    Incoming and outgoing transfers get the same payee, so each person is a
-    single payee in YNAB. ``contacts`` maps normalized phone numbers to
-    names. Transfers whose number isn't in it keep their payee as parsed.
-    Returns warnings.
+
+def apply_twint_contacts(transactions: list[Transaction], contacts: dict[str, str]) -> list[str]:
+    """Rename TWINT P2P transfers to "Twint - <name>" where a name is known.
+
+    The name comes from ``contacts`` (normalized phone number -> name) or,
+    failing that, from the export itself. Incoming and outgoing transfers
+    get the same payee, so each person is a single payee in YNAB. Transfers
+    with no known name keep their payee as parsed. Returns warnings.
     """
     warnings: list[str] = []
     for i, t in enumerate(transactions, start=1):
-        if t.twint_number is not None and t.twint_number in contacts:
-            payee = f"{TWINT_PAYEE_PREFIX}{contacts[t.twint_number]}"
-            t.payee = sanitize_field(payee, MAX_PAYEE_LEN, "payee", i, warnings)
+        if t.twint_number is None:
+            continue
+        name = contacts.get(t.twint_number) or t.twint_name
+        if name:
+            t.payee = sanitize_field(f"{TWINT_PAYEE_PREFIX}{name}", MAX_PAYEE_LEN, "payee", i, warnings)
     return warnings
 
 
@@ -207,6 +231,39 @@ def signed_amount(t: Transaction) -> Decimal:
     return t.inflow
 
 
+def _strip_configured_patterns(text: str, patterns: list[re.Pattern[str]]) -> str:
+    """Remove every match of each configured pattern, in order, from text."""
+    for pattern in patterns:
+        text = pattern.sub(" ", text)
+    return " ".join(text.split())
+
+
+def _format_twint_name(raw: str) -> str:
+    """Turn PostFinance's "MUSTER, ERIKA" into "Erika Muster"."""
+    last, sep, first = raw.partition(",")
+    name = f"{first.strip()} {last.strip()}" if sep else raw
+    return " ".join(name.split()).title()
+
+
+@dataclass(frozen=True)
+class _TwintP2P:
+    number: str
+    name: str | None
+    message: str
+
+
+def _match_twint_p2p(desc: str) -> _TwintP2P | None:
+    match = _TWINT_P2P_DATED_RE.fullmatch(desc) or _TWINT_P2P_RE.fullmatch(desc)
+    if match is None:
+        return None
+    raw_name = match.groupdict().get("name")
+    return _TwintP2P(
+        number=normalize_phone_number(match.group("number")),
+        name=_format_twint_name(raw_name) if raw_name else None,
+        message=(match.groupdict().get("message") or "").strip(),
+    )
+
+
 def _strip_configured_prefix(text: str, prefixes: list[str]) -> str:
     """Strip the first configured prefix that matches the start of text.
 
@@ -245,6 +302,7 @@ def _parse_row(
     cols: ColumnIndices,
     expected_ncols: int,
     strip_prefixes: list[str],
+    strip_patterns: list[re.Pattern[str]],
     include_category_memo: bool,
     transfer_checking_account: str | None,
     errors: list[str],
@@ -301,31 +359,48 @@ def _parse_row(
             f"{transfer_checking_account!r} -- make sure the matching entry on that "
             "account isn't also imported separately, or YNAB will create a duplicate"
         )
+    elif not raw_desc:
+        payee = BLANK_DESC_PAYEE
+        warnings.append(
+            f"record {record_no}: description is blank; imported with payee {BLANK_DESC_PAYEE!r}"
+        )
     else:
         desc = _strip_configured_prefix(raw_desc, strip_prefixes)
+        desc = _strip_configured_patterns(desc, strip_patterns)
+        if not desc:
+            desc = raw_desc
+            warnings.append(
+                f"record {record_no}: strip_prefixes/strip_patterns removed the whole "
+                f"description {raw_desc!r}; kept it unstripped"
+            )
         desc = _PLUS_BEFORE_DIGIT_RE.sub("", desc)
         payee = sanitize_field(desc, MAX_PAYEE_LEN, "payee", record_no, warnings)
-        if not payee:
-            errors.append(f"record {record_no}: description/payee is empty")
-            return None
 
+    twint = None if is_bill_payment else _match_twint_p2p(raw_desc)
+
+    # A TWINT P2P message ("MITTEILUNGEN: ...") always goes into the Memo,
+    # followed by Label/Kategorie with --category-memo.
+    memo_parts = [twint.message] if twint and twint.message else []
     if include_category_memo:
-        memo_parts = [
+        memo_parts += [
             row[idx].strip()
             for idx in (cols.label, cols.kategorie)
             if idx is not None and idx < len(row) and row[idx].strip()
         ]
-        memo = sanitize_field(" | ".join(memo_parts), MAX_MEMO_LEN, "memo", record_no, warnings)
-    else:
-        memo = ""
+    memo = sanitize_field(" | ".join(memo_parts), MAX_MEMO_LEN, "memo", record_no, warnings)
 
     outflow = -debit if debit is not None else None
     inflow = credit if credit is not None else None
 
-    twint_match = None if is_bill_payment else _TWINT_P2P_RE.fullmatch(raw_desc)
-    twint_number = normalize_phone_number(twint_match.group(1)) if twint_match else None
-
-    return Transaction(txn_date, payee, memo, outflow, inflow, twint_number)
+    return Transaction(
+        txn_date,
+        payee,
+        memo,
+        outflow,
+        inflow,
+        twint.number if twint else None,
+        twint.name if twint else None,
+    )
 
 
 def _warn_about_ambiguous_dedup_groups(transactions: list[Transaction], warnings: list[str]) -> None:
@@ -362,6 +437,7 @@ def parse_postfinance_csv(
     include_category_memo: bool = False,
     transfer_checking_account: str | None = None,
     notes: list[str] | None = None,
+    strip_patterns: list[re.Pattern[str]] | None = None,
 ) -> tuple[list[Transaction], list[str]]:
     """Parse a PostFinance export into transactions plus non-fatal warnings.
 
@@ -371,6 +447,7 @@ def parse_postfinance_csv(
     skipped rows) are appended to ``notes`` if provided.
     """
     strip_prefixes = strip_prefixes or []
+    strip_patterns = strip_patterns or []
     if notes is None:
         notes = []
     notes_before = len(notes)
@@ -430,6 +507,7 @@ def parse_postfinance_csv(
                 cols,
                 expected_ncols,
                 strip_prefixes,
+                strip_patterns,
                 include_category_memo,
                 transfer_checking_account,
                 errors,

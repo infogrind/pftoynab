@@ -9,6 +9,7 @@ ignored in favor of the default).
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,6 +31,8 @@ DEFAULT_CREDIT_CARD_GLOB = "export_kreditkartenuebersicht_*.csv"
 @dataclass
 class Config:
     strip_prefixes: list[str] = field(default_factory=list)
+    # Compiled case-insensitively; every match is removed from the payee.
+    strip_patterns: list[re.Pattern[str]] = field(default_factory=list)
     input_directory: str | None = None
     input_glob: str = DEFAULT_INPUT_GLOB
     credit_card_glob: str = DEFAULT_CREDIT_CARD_GLOB
@@ -67,6 +70,20 @@ def load_config(path: Path) -> Config:
     strip_prefixes = payee_section.get("strip_prefixes", [])
     if not isinstance(strip_prefixes, list) or not all(isinstance(p, str) for p in strip_prefixes):
         raise PftoynabError(f"config file {path}: payee.strip_prefixes must be a list of strings")
+
+    raw_strip_patterns = payee_section.get("strip_patterns", [])
+    if not isinstance(raw_strip_patterns, list) or not all(
+        isinstance(p, str) and p for p in raw_strip_patterns
+    ):
+        raise PftoynabError(f"config file {path}: payee.strip_patterns must be a list of non-empty strings")
+    strip_patterns: list[re.Pattern[str]] = []
+    for pattern in raw_strip_patterns:
+        try:
+            strip_patterns.append(re.compile(pattern, re.IGNORECASE))
+        except re.error as e:
+            raise PftoynabError(
+                f"config file {path}: payee.strip_patterns entry {pattern!r} is not a valid regex: {e}"
+            ) from e
 
     input_section = data.get("input", {})
     if not isinstance(input_section, dict):
@@ -113,6 +130,7 @@ def load_config(path: Path) -> Config:
 
     return Config(
         strip_prefixes=strip_prefixes,
+        strip_patterns=strip_patterns,
         input_directory=input_directory,
         input_glob=input_glob,
         credit_card_glob=credit_card_glob,

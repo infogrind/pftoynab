@@ -16,7 +16,13 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from .errors import PftoynabError
-from .parser import MAX_MEMO_LEN, Transaction, sanitize_field, signed_amount
+from .parser import (
+    MAX_MEMO_LEN,
+    Transaction,
+    needs_twint_contact_name,
+    sanitize_field,
+    signed_amount,
+)
 
 
 def run_interactive_memo(transactions: list[Transaction]) -> list[str]:
@@ -43,7 +49,10 @@ def ask_twint_contact_names(
     contacts: dict[str, str],
     save_contact: Callable[[str, str], None],
 ) -> dict[str, str]:
-    """Ask for a name for each TWINT P2P number not in ``contacts``.
+    """Ask for a name for each TWINT P2P number with no name yet.
+
+    A number has no name if it's neither in ``contacts`` nor named in the
+    export itself (only the newer TWINT P2P format includes names).
 
     Numbers are asked about once each, in order of first appearance, listing
     every transaction with that number so it can be looked up in online
@@ -54,7 +63,7 @@ def ask_twint_contact_names(
     """
     by_number: dict[str, list[Transaction]] = {}
     for t in transactions:
-        if t.twint_number is not None and t.twint_number not in contacts:
+        if needs_twint_contact_name(t, contacts):
             by_number.setdefault(t.twint_number, []).append(t)
     if not by_number:
         return {}

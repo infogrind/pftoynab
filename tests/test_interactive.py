@@ -127,3 +127,16 @@ def test_twint_contact_entry_aborts_on_keyboard_interrupt(monkeypatch):
         ask_twint_contact_names(
             [_twint_tx(1, "+41791234567", inflow=Decimal(1))], {}, lambda n, name: None
         )
+
+
+def test_numbers_named_in_the_export_are_not_asked_for(monkeypatch):
+    named = Transaction(
+        date(2026, 1, 1), "TWINT GELD SENDEN ...", "", Decimal(1), None, "+41791234567", "Erika Muster"
+    )
+
+    def fail_if_called(prompt):
+        raise AssertionError("input() should not be called")
+
+    monkeypatch.setattr("builtins.input", fail_if_called)
+
+    assert ask_twint_contact_names([named], {}, lambda n, name: None) == {}
