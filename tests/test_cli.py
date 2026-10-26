@@ -352,6 +352,34 @@ def test_auto_detect_no_matching_file_is_reported(tmp_path, monkeypatch, capsys)
     assert "no file matching" in capsys.readouterr().err
 
 
+def test_auto_detect_hints_at_wealth_overview_download(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+    (downloads / "export_vermoegensuebersicht_20261026.csv").write_text("x", encoding="utf-8")
+
+    exit_code = cli.main([])
+
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "no file matching" in err
+    assert "Did you accidentally download the CSV from the 'Vermögensübersicht' view?" in err
+
+
+def test_explicit_wealth_overview_file_is_rejected_with_hint(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "find_config_path", lambda: tmp_path / "config.toml")
+    wrong = write(tmp_path / "export_vermoegensuebersicht_20261026.csv", "x")
+
+    exit_code = cli.main([str(wrong)])
+
+    assert exit_code == 1
+    assert "Did you accidentally download the CSV from the 'Vermögensübersicht' view?" in (
+        capsys.readouterr().err
+    )
+    assert wrong.exists()
+
+
 def test_auto_detect_missing_downloads_directory_is_reported(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

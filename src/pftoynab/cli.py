@@ -16,6 +16,11 @@ from .writer import write_ynab_csv
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB; a personal transaction export is orders of magnitude smaller.
 
+# PostFinance's asset overview export, easily downloaded by mistake from the
+# view next to the account movements. Recognized only to give a helpful hint.
+WEALTH_OVERVIEW_GLOB = "export_vermoegensuebersicht_*.csv"
+WEALTH_OVERVIEW_HINT = "Did you accidentally download the CSV from the 'Vermögensübersicht' view?"
+
 
 def _find_latest_export(config: Config) -> Path:
     directory = Path(config.input_directory).expanduser() if config.input_directory else Path.home() / "Downloads"
@@ -29,10 +34,13 @@ def _find_latest_export(config: Config) -> Path:
         if p.is_file()
     }
     if not matches:
-        raise PftoynabError(
+        message = (
             f"no file matching {config.input_glob!r} or {config.credit_card_glob!r} "
             f"found in {directory}; pass a file path explicitly"
         )
+        if any(p.is_file() for p in directory.glob(WEALTH_OVERVIEW_GLOB)):
+            message += f"\nThere is a {WEALTH_OVERVIEW_GLOB!r} file there, though. {WEALTH_OVERVIEW_HINT}"
+        raise PftoynabError(message)
     return max(matches, key=lambda p: p.stat().st_mtime)
 
 
@@ -142,6 +150,11 @@ def _run(
     else:
         input_path = input_path.expanduser()
 
+    if input_path.match(WEALTH_OVERVIEW_GLOB):
+        raise PftoynabError(
+            f"{input_path.name} is a wealth overview, not an account or credit card "
+            f"export. {WEALTH_OVERVIEW_HINT}"
+        )
     if not input_path.exists():
         raise PftoynabError(f"input file not found: {input_path}")
     if input_path.is_dir():

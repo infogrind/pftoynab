@@ -68,7 +68,10 @@ If the path is omitted, the newest file matching either configured glob
 (`export_bewegungen_*.csv` or `export_kreditkartenuebersicht_*.csv`) in
 `~/Downloads` is used automatically (the directory and both globs are
 configurable -- see Configuration) -- handy since those are exactly the
-default filenames and location a PostFinance export lands in.
+default filenames and location a PostFinance export lands in. If it
+finds only a "Vermögensübersicht" export (`export_vermoegensuebersicht_*.csv`,
+easily downloaded by mistake), it says so; passing such a file explicitly
+is rejected with the same hint.
 
 Options:
 
