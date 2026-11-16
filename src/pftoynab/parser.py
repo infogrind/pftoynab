@@ -26,7 +26,7 @@ import io
 import re
 from collections.abc import Iterator
 from dataclasses import astuple, dataclass
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from .errors import PftoynabError
@@ -45,6 +45,11 @@ MAX_MEMO_LEN = 200
 FORMULA_TRIGGER_CHARS = ("=", "+", "-", "@")
 
 _AMOUNT_RE = re.compile(r"[+-]?\d+(\.\d+)?")
+
+# PostFinance's DD.MM.YYYY dates (day and month may lack a leading zero, as
+# datetime.strptime's "%d.%m.%Y" would also accept). Parsed into a plain
+# calendar date: no timezone concept applies.
+_DATE_RE = re.compile(r"(?P<day>\d{1,2})\.(?P<month>\d{1,2})\.(?P<year>\d{4})")
 
 # PostFinance's fixed description for a credit card bill payment coming in
 # from the linked checking account. Recognized so it can be skipped (the
@@ -334,8 +339,11 @@ def _parse_row(
         return None
 
     date_raw = row[cols.date].strip()
+    match = _DATE_RE.fullmatch(date_raw)
     try:
-        txn_date = datetime.strptime(date_raw, "%d.%m.%Y").date()  # noqa: DTZ007 -- calendar date only, no timezone concept applies
+        if match is None:
+            raise ValueError(date_raw)
+        txn_date = date(int(match["year"]), int(match["month"]), int(match["day"]))
     except ValueError:
         errors.append(f"record {record_no}: invalid date {date_raw!r} (expected DD.MM.YYYY)")
         return None

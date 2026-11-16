@@ -1,4 +1,5 @@
 import re
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -75,6 +76,9 @@ def test_no_data_rows_raises():
             id="no-amount",
         ),
         pytest.param({"date": "32.01.2026"}, "invalid date", id="invalid-date"),
+        pytest.param({"date": "29.02.2025"}, "invalid date", id="invalid-date-no-leap-year"),
+        pytest.param({"date": "2026-01-15"}, "invalid date", id="invalid-date-iso-format"),
+        pytest.param({"date": "15.01.26"}, "invalid date", id="invalid-date-two-digit-year"),
         pytest.param(
             {"debit": "abc", "credit": ""}, "not a valid amount", id="invalid-amount-format"
         ),
@@ -562,6 +566,15 @@ def test_twint_p2p_message_comes_before_category_memo():
     text = build_export([row(desc=desc, label="Essen", kategorie="Finanzen")])
     transactions, _ = parse_postfinance_csv(text, include_category_memo=True)
     assert transactions[0].memo == "Zmittag | Essen | Finanzen"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("15.01.2026", date(2026, 1, 15)), ("1.2.2026", date(2026, 2, 1)), ("29.02.2024", date(2024, 2, 29))],
+)
+def test_dates_are_parsed(raw, expected):
+    transactions, _ = parse_postfinance_csv(build_export([row(date=raw)]))
+    assert transactions[0].txn_date == expected
 
 
 @pytest.mark.parametrize(
