@@ -543,9 +543,9 @@ def test_apply_twint_contacts_prefers_config_name_over_export_name():
     [
         (
             "TWINT GELD EMPFANGEN VOM 17.10.2026 VON TELEFON-NR. +41764034092 SCHURICHT, KRISTINA MITTEILUNGEN: SKIKURS 2027",
-            "SKIKURS 2027",
+            "Skikurs 2027",
         ),
-        ("TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41797692310 MITTEILUNGEN: ZMITTAG", "ZMITTAG"),
+        ("TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41797692310 MITTEILUNGEN: ZMITTAG", "Zmittag"),
         ("TWINT GELD EMPFANGEN VOM 10.10.2026 VON TELEFON-NR. +41798170063 GRÜNEWALD, TOBIAS", ""),
         ("TWINT Geld senden an +41797692310", ""),
         ("GUTSCHRIFT AUFTRAGGEBER: ACME AG MITTEILUNGEN: RECHNUNG 42", ""),
@@ -561,7 +561,25 @@ def test_twint_p2p_message_comes_before_category_memo():
     desc = "TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41797692310 BASTER, MAURO MITTEILUNGEN: ZMITTAG"
     text = build_export([row(desc=desc, label="Essen", kategorie="Finanzen")])
     transactions, _ = parse_postfinance_csv(text, include_category_memo=True)
-    assert transactions[0].memo == "ZMITTAG | Essen | Finanzen"
+    assert transactions[0].memo == "Zmittag | Essen | Finanzen"
+
+
+@pytest.mark.parametrize(
+    ("message", "memo"),
+    [
+        ("DANKE FÜR S ZNACHT", "Danke für s znacht"),
+        ("DANKE! BIS BALD. MERCI? JA", "Danke! Bis bald. Merci? Ja"),
+        ("«ÄPFEL» UND BIRNEN", "«Äpfel» und birnen"),
+        ("2027 SKIKURS", "2027 skikurs"),
+        ("Already Mixed Case", "Already Mixed Case"),
+        ("123", "123"),
+    ],
+)
+def test_twint_p2p_message_is_sentence_cased(message, memo):
+    desc = f"TWINT GELD SENDEN VOM 20.10.2026 AN TELEFON-NR. +41797692310 BASTER, MAURO MITTEILUNGEN: {message}"
+    text = build_export([row(desc=desc)])
+    transactions, _ = parse_postfinance_csv(text)
+    assert transactions[0].memo == memo
 
 
 def test_formula_like_twint_message_is_neutralized_in_memo():

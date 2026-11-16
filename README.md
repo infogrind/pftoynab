@@ -62,7 +62,9 @@ doesn't. For each number with no name from either, you're asked for one
 banking); the name is saved to the config right away and used in the
 output. Press Enter to skip a number, which leaves its payee as is and
 prints a warning. A message attached to the transfer (the newer format's
-`"MITTEILUNGEN: ..."` part) goes into `Memo`.
+`"MITTEILUNGEN: ..."` part) goes into `Memo`. PostFinance exports it in
+all caps, so it's converted to sentence case (`"DANKE FÜR S ZNACHT"` becomes
+`"Danke für s znacht"`); nouns and names come out lowercase.
 
 If the path is omitted, the newest file matching either configured glob
 (`export_bewegungen_*.csv` or `export_kreditkartenuebersicht_*.csv`) in

@@ -245,6 +245,24 @@ def _format_twint_name(raw: str) -> str:
     return " ".join(name.split()).title()
 
 
+# The start of a sentence: the very beginning of the text or a ".", "!" or
+# "?" followed by whitespace, then any non-word characters (quotes, emoji),
+# then the first letter.
+_SENTENCE_START_RE = re.compile(r"(^|[.!?]\s+)(\W*)([^\W\d_])")
+
+
+def _sentence_case(text: str) -> str:
+    """Turn PostFinance's all-caps "DANKE! BIS BALD" into "Danke! Bis bald".
+
+    The original casing is lost, so this is only a best guess: nouns and
+    names come out lowercase. Text that isn't all caps is left alone, in
+    case PostFinance ever starts keeping the original casing.
+    """
+    if text != text.upper():
+        return text
+    return _SENTENCE_START_RE.sub(lambda m: m[1] + m[2] + m[3].upper(), text.lower())
+
+
 @dataclass(frozen=True)
 class _TwintP2P:
     number: str
@@ -260,7 +278,7 @@ def _match_twint_p2p(desc: str) -> _TwintP2P | None:
     return _TwintP2P(
         number=normalize_phone_number(match.group("number")),
         name=_format_twint_name(raw_name) if raw_name else None,
-        message=(match.groupdict().get("message") or "").strip(),
+        message=_sentence_case((match.groupdict().get("message") or "").strip()),
     )
 
 
