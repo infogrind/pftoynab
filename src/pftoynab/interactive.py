@@ -63,8 +63,9 @@ def ask_twint_contact_names(
     """
     by_number: dict[str, list[Transaction]] = {}
     for t in transactions:
-        if needs_twint_contact_name(t, contacts):
-            by_number.setdefault(t.twint_number, []).append(t)
+        number = t.twint_number
+        if number is not None and needs_twint_contact_name(t, contacts):
+            by_number.setdefault(number, []).append(t)
     if not by_number:
         return {}
 
